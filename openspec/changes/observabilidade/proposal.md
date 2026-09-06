@@ -30,9 +30,7 @@ aplicacao existir**.
 - **Armazenamento de rastros, metricas e logs** com os repositorios de objetos
   como destino final, em modo de processo unico no ambiente de desenvolvimento.
 - **Coleta de metricas dos componentes de infraestrutura** pelo proprio ponto de
-  ingestao, eliminando um componente autonomo de coleta. **BREAKING** em relacao
-  ao registrado no contexto do projeto, que previa um coletor de metricas
-  separado.
+  ingestao, eliminando um componente autonomo de coleta.
 - **Compactacao e retencao efetivas**, tratadas como requisito e nao como
   configuracao: o criterio de aceitacao e dado antigo desaparecer, nao a opcao
   estar presente.
