@@ -3,11 +3,16 @@ schema: spec-driven
 context: |
   DOMINIO
   ERP de gestao de vendas, organizado em modulos:
-    - Cadastro    (Produto, ProdutoSetor, Marca, Categoria, Cliente,
+    - Cadastro    (Produto, Marca, Categoria, Cliente,
                    Fornecedor, Filial)
     - Estoque     (saldo, movimento, reserva, custo medio, transferencia)
     - Vendas      (pedido, itens, preco, desconto)
     - Financeiro  (titulo, baixa, conciliacao, fluxo de caixa)
+
+    Categoria e HIERARQUICA. As consequencias -- profundidade, nivel em
+    que o produto pendura, efeito de mover uma categoria sobre a
+    subarvore, inativacao em cascata e forma de representacao -- sao
+    decisao da change de Cadastro, nao do contexto.
 
   STACK
     - .NET 10 (SDK 10.0.301), Minimal API
@@ -69,11 +74,24 @@ context: |
     - Estoque e POR FILIAL: saldo(produto_id, filial_id) com PK composta;
       transferencia entre filiais e caso de uso de dominio
     - Vendas e Financeiro registram a filial de origem
-    - PENDENTE (decisao de modulo, contabil): custo medio por filial ou
-      global
-    - PENDENTE (decisao de modulo): numeracao de pedido por filial ou
-      global. Numeracao sequencial SEM lacunas (exigencia fiscal) nao sai
-      de SEQUENCE do Postgres, exige tabela de contador com lock
+    - PARAMETROS DE EMPRESA (nao sao pendencias, e nao sao multi-tenant:
+      a escolha continua sendo multi-filial de UMA empresa). Os dois modos
+      existem e sao escolhidos na implantacao. A entidade que os guarda
+      nasce na change do modulo que primeiro os consumir, nunca antes --
+      configuracao sem leitor e codigo morto:
+        * custo medio: por filial ou global. A tabela nasce SEMPRE no grao
+          fino (produto_id, filial_id); o parametro decide como o movimento
+          RECALCULA (global recalcula todas as linhas do produto juntas).
+          Se a forma da tabela variasse com o parametro seriam dois
+          schemas sem caminho entre eles. Trocar depois do primeiro
+          movimento e evento contabil com recalculo de historico, nao
+          toggle: escolha de implantacao, imutavel na pratica
+        * numeracao de pedido: por filial ou global. Contador com coluna
+          de ESCOPO (o escopo e a filial ou um valor unico global), entao
+          trocar depois afeta so os proximos pedidos e o historico fica
+          intacto -- este e configuravel de verdade. Numeracao sequencial
+          SEM lacunas (exigencia fiscal) nao sai de SEQUENCE do Postgres,
+          exige tabela de contador com lock
 
   MENSAGERIA / CONSISTENCIA
     - Consistencia eventual entre modulos (estoque negativo e aceitavel)
