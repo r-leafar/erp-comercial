@@ -1,0 +1,528 @@
+schema: spec-driven
+
+context: |
+  DOMINIO
+  ERP de gestao de vendas, organizado em modulos:
+    - Cadastro    (Produto, ProdutoSetor, Marca, Categoria, Cliente,
+                   Fornecedor, Filial)
+    - Estoque     (saldo, movimento, reserva, custo medio, transferencia)
+    - Vendas      (pedido, itens, preco, desconto)
+    - Financeiro  (titulo, baixa, conciliacao, fluxo de caixa)
+
+  STACK
+    - .NET 10 (SDK 10.0.301), Minimal API
+    - PostgreSQL via CloudNativePG (EF Core + Npgsql para escrita;
+      SQL direto para leitura)
+    - Valkey como L2 de cache (HybridCache) e canal de invalidacao
+    - Object storage S3: MinIO em dev, S3 de terceiro em prod
+    - JWT bearer com emissor dev local (Keycloak fica para change futura)
+    - OpenTelemetry -> stack LGTM (Grafana, Loki, Tempo, Mimir)
+    - Grafana Alloy como agente unico de coleta (e uma DISTRIBUICAO do
+      OpenTelemetry Collector, nao uma alternativa a ele: embute os
+      componentes otelcol e acrescenta os nativos de Prometheus e Loki)
+    - NAO ha Prometheus autonomo: o Mimir ja oferece a interface de
+      consulta compativel, e o proprio Alloy faz o scrape
+    - Cluster k3s local, gerenciado por GitOps com ArgoCD (o sistema
+      operacional do host varia; WSL2 apenas quando o host e Windows)
+    - Sealed Secrets para segredos versionados
+    - Monorepo erp-comercial, prefixo de assembly Erp
+
+  ARQUITETURA
+    Clean Architecture classica, module-first compacto:
+      1 projeto por modulo, camadas como pastas internas
+      (Domain/ Application/ Infrastructure/ Endpoints/ Contracts/)
+      + SharedKernel + Platform + Api (host) + Tests.Architecture
+
+    - SharedKernel e PURO: sem estado, sem infra, sem dependencia
+      externa (Result, Dinheiro, EntidadeBase, FilialId, e os ports
+      como IArmazenamentoArquivo)
+    - Platform concentra infra COM ESTADO e trabalho de fundo:
+      schema platform (outbox, inbox, arquivo), OutboxRelay,
+      Subscriber, VarredorDeOrfaos, AdaptadorS3, pipeline de auth
+    - Application organizada em vertical slices (por feature, nao por
+      tipo tecnico)
+    - Regra vertical (dependencia aponta para dentro) imposta por
+      arch tests (NetArchTest), nao por csproj
+    - Fronteira de modulo imposta pelo compilador: apenas Contracts/
+      e publico, todo o resto e internal
+    - Escrita via Repository sobre agregado; leitura via query direta
+    - 1 DbContext por modulo, 1 schema Postgres por modulo,
+      SEM foreign key entre schemas (guarda-se o ID, nao a FK)
+    - Endpoints: Minimal API com handler injetado diretamente
+      (sem MediatR) + endpoint filters para cross-cutting
+
+  PADRAO RECORRENTE: ISOLE A COSTURA, VARIE POR AMBIENTE
+    O projeto repete a mesma estrategia em varios pontos. Cada um tem
+    UM ponto de troca e contrato estavel:
+      IEventTransport   in-process (hoje)  -> RabbitMQ (depois)
+      emissor JWT       /dev/token         -> Keycloak
+      backend S3        MinIO (dev)        -> S3 de terceiro (prod)
+      config            overlay dev        -> overlay prod
+    Nunca use `if (ambiente == dev)` no codigo: a variacao mora na
+    configuracao e nos overlays do GitOps.
+
+  MULTI-FILIAL (1 empresa, N filiais)
+    - Cadastro e GLOBAL: unicidade sem filial (unique(codigo))
+    - Filial e uma entidade de Cadastro, exposta em Cadastro.Contracts;
+      os demais modulos a referenciam apenas por FilialId
+      (strongly-typed id no SharedKernel)
+    - Estoque e POR FILIAL: saldo(produto_id, filial_id) com PK composta;
+      transferencia entre filiais e caso de uso de dominio
+    - Vendas e Financeiro registram a filial de origem
+    - PENDENTE (decisao de modulo, contabil): custo medio por filial ou
+      global
+    - PENDENTE (decisao de modulo): numeracao de pedido por filial ou
+      global. Numeracao sequencial SEM lacunas (exigencia fiscal) nao sai
+      de SEQUENCE do Postgres, exige tabela de contador com lock
+
+  MENSAGERIA / CONSISTENCIA
+    - Consistencia eventual entre modulos (estoque negativo e aceitavel)
+    - Domain events: internos ao modulo, em memoria, mesma transacao,
+      nunca cruzam fronteira
+    - Integration events: cruzam modulos via outbox transacional em
+      Postgres (SKIP LOCKED + LISTEN/NOTIFY), dispatcher proprio
+    - Decomposicao: IIntegrationEventPublisher (grava na tx de negocio),
+      OutboxRelay (claim e entrega), IEventTransport (unica costura de
+      transporte), Subscriber (dedup, escopo DI, tx, invoca handler),
+      IIntegrationEventHandler
+    - IEventTransport e o unico ponto que muda ao migrar para RabbitMQ;
+      handlers e Subscriber nao mudam
+    - Idempotencia obrigatoria: tabela inbox por modulo, chave
+      (message_id, handler), marcada na MESMA transacao do efeito
+    - Envelope usa nome logico versionado de mensagem
+      ("vendas.venda-confirmada.v1"), nunca nome de tipo CLR
+    - Retry com backoff exponencial + jitter, e dead letter que nao
+      bloqueia a fila (ordem de entrega nao e garantida)
+    - ATENCAO A SEMANTICA DE ENTREGA: o outbox e competing consumers
+      (SKIP LOCKED faz EXATAMENTE UM pod processar), o que e correto
+      para EFEITOS. Nunca use o outbox para algo que precise de
+      BROADCAST a todos os pods -- ver secao CACHE
+
+  CONTEXTO DE EXECUCAO (sincrono e assincrono)
+    - IFilialContext e IUsuarioAtual sao scoped e usados por handlers
+      tanto de HTTP quanto de evento
+    - Handler de integration event NAO tem HttpContext nem JWT; por isso o
+      envelope da outbox carrega filial_id e usuario_id, e o Subscriber
+      popula esses contextos antes de invocar o handler
+    - Consequencia: o handler nao distingue origem HTTP de origem evento,
+      e a auditoria registra o usuario que originou a acao (nunca "system")
+
+  AUTENTICACAO E AUTORIZACAO
+    O pipeline de autorizacao e completo desde a fundacao; apenas o
+    EMISSOR do token e local em dev. Keycloak entra em change futura
+    ("adotar-keycloak") e a troca fica confinada a Authority, Audience e
+    uma implementacao de normalizacao de claims.
+
+    - Token JWT via JwtBearer, validado LOCALMENTE (sem hop por request,
+      nao entra no trace)
+    - Emissor em dev: endpoint /dev/token assinando HS256 com chave de
+      configuracao, mapeado APENAS quando ASPNETCORE_ENVIRONMENT=
+      Development. Deve existir teste que falhe se a rota responder fora
+      de Development (emissor esquecido em producao e backdoor completa)
+    - O emissor dev emite no MESMO formato que o Keycloak emitira
+      (realm_access.roles aninhado; filiais multivalorado), para que a
+      troca de IdP nao quebre policies em runtime
+    - IClaimsTransformation normaliza qualquer formato de emissor para o
+      contrato interno de claims: usuario_id, filiais[], perfis[].
+      Observacao: o Keycloak emite roles em realm_access.roles (JSON
+      aninhado), que o ASP.NET nao mapeia para ClaimTypes.Role
+      automaticamente
+    - Divisao de responsabilidade:
+        IdP (dev token hoje, Keycloak depois) = autorizacao grosseira e
+          tecnica (perfis: vendedor, supervisor, financeiro, admin) +
+          filial como ATRIBUTO de usuario em claim filiais[] (nao role)
+        Dominio = autorizacao de negocio (ex: desconto acima de 10% exige
+          supervisor; cliente inadimplente nao compra a prazo), como
+          invariante do agregado retornando erro de negocio
+    - Endpoints usam RequireAuthorization com policies do ASP.NET; um
+      endpoint filter valida se a filial do request esta em claim filiais[]
+    - 401/403 respondem em ProblemDetails
+
+  TRATAMENTO DE ERROS (hibrido)
+    - Result<T> para erros ESPERADOS de negocio ("saldo insuficiente",
+      "cliente inativo", "pedido ja fechado")
+    - Exception para o INESPERADO (bug, indisponibilidade, violacao de
+      invariante interna)
+    - Resposta HTTP em ProblemDetails com codigo de erro estavel e
+      mensagem em pt-BR
+
+  LEITURA CROSS-MODULO (sem FK entre schemas)
+    - Dado HISTORICO: read model denormalizado por snapshot. O modulo
+      assina o integration event e mantem copia local (ex:
+      vendas.item.produto_nome_snapshot). Isso nao e duplicacao: a nota
+      deve refletir o nome do produto NA DATA DA VENDA
+    - Dado AO VIVO (autocomplete, validacao de existencia): consulta
+      sincrona via interface publica em Contracts do modulo dono
+
+  ARMAZENAMENTO DE OBJETOS (S3)
+    O S3 tem DOIS papeis e cada um tem desenho proprio:
+      [1] INFRAESTRUTURA (o app nao ve): Loki, Tempo e Mimir guardam
+          chunks/blocos; CloudNativePG guarda WAL e base backup
+      [2] APLICACAO (o app fala direto): imagens de produto, anexos,
+          comprovantes
+
+    - Backend: MinIO em dev (escolhido por FIDELIDADE -- e o alvo mais
+      testado por Loki/Tempo/Mimir/CNPG e tem feature set completo);
+      S3 de terceiro em prod
+    - RESTRICAO DE PROJETO: usar apenas o subconjunto comum da API S3
+      (PUT, GET, DELETE, LIST, HEAD, multipart, presigned). Versionamento,
+      object lock, lifecycle, SSE, bucket policy no formato AWS e
+      notificacoes exigem decisao explicita -- cada um reduz o conjunto
+      de backends possiveis em prod
+    - Forma da configuracao, identica para TODO consumidor (Loki, Tempo,
+      Mimir, CNPG, adapter .NET): endpoint, region, access_key,
+      secret_key, bucket, force_path_style, tls. Nenhum host hardcoded
+    - Gotcha: dev usa path-style (http://host/bucket) e prod usa
+      virtual-hosted. Esquecer force_path_style em dev causa falha de DNS
+      obscura, nao "bucket nao encontrado"
+    - Gotcha: MinIO ignora region, mas o AWS SDK EXIGE um valor.
+      Convencao: us-east-1 em dev
+    - Buckets: mimir-blocks, mimir-ruler, mimir-alertmanager,
+      loki-chunks, loki-ruler, tempo-traces, postgres-backup, e um unico
+      bucket "arquivos" para negocio com prefixo por modulo
+      (cadastro/produtos/..., vendas/anexos/...)
+    - Uma chave de acesso por consumidor, com permissao so no seu bucket
+
+    UPLOAD DE ARQUIVO DE NEGOCIO
+    - Decisao: upload ATRAVES DA API (nao presigned direto). Presigned
+      fica adiado; a troca depois e local ao adapter e ao endpoint
+    - Isso NAO elimina o problema das duas fases (Postgres e S3 nao
+      compartilham transacao). Elimina o presigned e o problema de host.
+      A janela de inconsistencia cai de horas para a duracao de um request
+    - Maquina de estados em platform.arquivo:
+        PENDENTE (tx curta) -> PUT no S3 -> CONFIRMADO na MESMA tx do
+        efeito de negocio -> MARCADO_REMOCAO -> removido
+    - VarredorDeOrfaos: BackgroundService usando a MESMA maquina
+      SKIP LOCKED do OutboxRelay; limpa PENDENTE expirado e
+      MARCADO_REMOCAO
+    - Postgres e a fonte da verdade: objeto sem linha e lixo a varrer
+    - Validar tipo REAL do conteudo (magic bytes), nao a extensao, ANTES
+      de qualquer byte chegar ao storage
+    - Limite de tamanho no endpoint e no ingress, com streaming e nao
+      buffer em memoria (upload sem limite em pod com limits.memory e
+      OOMKill garantido, e derruba o pod inteiro, nao so o request)
+    - NUNCA persistir URL no dominio, apenas a CHAVE do objeto. O adapter
+      constroi a URL na leitura. URL gravada acopla o dado ao host, ao
+      protocolo e ao provedor
+
+  CACHE
+    - HybridCache (Microsoft.Extensions.Caching.Hybrid) com L1 em memoria
+      do processo e L2 no Valkey. Ganho principal sobre IDistributedCache
+      cru: stampede protection (N misses simultaneos na mesma chave viram
+      UMA chamada de factory) e invalidacao por tag
+    - L1 E POR POD. Invalidar no pod-1 nao invalida o L1 do pod-2:
+        * L1 com TTL CURTO (segundos) -- e otimizacao de rajada, nao
+          fonte de verdade
+        * L2 com TTL longo
+        * verificar, na versao fixada, se ha invalidacao de L1 assistida
+          pelo backend
+    - INVALIDACAO VAI POR PUB/SUB DO VALKEY, NUNCA PELO OUTBOX. Sao
+      semanticas opostas: outbox e competing consumers (um pod so),
+      invalidacao precisa de broadcast (todos os pods). Usar o outbox
+      "funciona" com 1 replica e quebra silenciosamente com N
+    - Cache entra como DECORATOR do lado da LEITURA (sobre as interfaces
+      de query). Domain e Application nao sabem que existe cache
+    - PROIBIDO cachear no Repository de escrita: o agregado e carregado
+      para MUTAR; vindo de cache, o xmin esta velho (update perdido ou
+      409 falso) e as invariantes sao validadas contra estado inexistente
+    - Toda chave de cache de dado por filial DEVE incluir filial_id, e
+      toda chave de dado por usuario DEVE incluir o usuario. Omitir e
+      vazamento silencioso entre filiais/usuarios
+    - Bom cachear: lookups de Cadastro, tabela de preco, permissoes
+      derivadas de claims. Cuidado com saldo de estoque (TTL de segundos)
+
+  OBSERVABILIDADE
+    - Domain e Application usam apenas System.Diagnostics (ActivitySource,
+      Meter) da BCL; o SDK do OpenTelemetry existe somente no projeto Api
+    - traceparent/tracestate W3C sao persistidos na outbox e restaurados no
+      consumo, para que o trace atravesse a fronteira assincrona
+    - Convencoes semanticas de messaging do OTEL desde o inicio
+      (messaging.system, messaging.operation, messaging.message.id,
+      messaging.destination.name), para que dashboards sobrevivam a troca
+      de transporte
+    - Metricas de outbox desde o dia 1: outbox.pending, outbox.lag_seconds,
+      outbox.dead_lettered, outbox.attempts. outbox.lag_seconds e a metrica
+      central de consistencia eventual
+    - Metricas de cache por camada (hit/miss de L1 e L2): hit de L1 nao
+      gera span, entao sem metrica nao ha como saber se o cache funciona
+    - UM agente de coleta (Alloy) faz tudo: recebe OTLP dos tres sinais,
+      faz o scrape das metricas dos componentes de infraestrutura,
+      coleta log de pod, enriquece com identidade de origem no cluster
+      (atributos derivados do ambiente, que prevalecem sobre o que o
+      emissor declarar), agrupa em lotes e encaminha a cada
+      armazenamento com escrita nativa, sem camada de traducao
+    - A COSTURA e o OTLP: a aplicacao emite OTLP e nao sabe o que
+      recebe. O agente fica ATRAS da costura, entao troca-lo depois nao
+      toca a aplicacao, os armazenamentos nem as specs -- so a config
+      do agente, que usa a linguagem de componentes do Alloy e nao o
+      YAML do Collector puro
+    - Modo de implantacao: em dev single-node UMA instancia acumula os
+      papeis de agente por no (log de pod, metricas do no) e de porta de
+      entrada (OTLP, scrape). Em prod multi-no os papeis se separam --
+      mais uma diferenca a declarar na sobreposicao
+    - O grafo visual de componentes do Alloy e ferramenta de diagnostico
+      do proprio pipeline: contagem por aresta mostra onde o dado para
+    - NAO existe coletor de metricas autonomo separado: seriam dois
+      componentes, dois volumes e duas retencoes para o MESMO sinal,
+      com um deles sendo so intermediario -- caro num host onde memoria
+      e o recurso mais disputado
+    - Perder telemetria e SEMPRE preferivel a afetar quem a emite:
+      acumulo limitado, descarte controlado e CONTABILIZADO. Descarte
+      silencioso faz ausencia de registro ser lida como ausencia de
+      atividade
+    - Loki, Tempo e Mimir usam S3 como backend. EM DEV, os tres rodam em
+      modo MONOLITICO (um processo), nao microservices: mesmo
+      comportamento funcional com uma fracao dos pods e da RAM
+    - COMPACTOR E OBRIGATORIO. Retencao configurada sem compactor rodando
+      nao apaga nada: os objetos acumulam para sempre e o disco enche.
+      No Loki, retention_period exige compactor com retention_enabled
+    - NOTA PARA PROD (nao tratar agora): compute e object storage devem
+      ser CO-LOCALIZADOS. Telemetria em S3 remoto degrada muito a query
+      (Tempo/Mimir puxam muitos objetos por consulta) e pode gerar custo
+      inesperado -- o compactor faz LIST/GET/PUT/DELETE continuamente, e
+      provedores com retencao minima cobrada (ex: 90 dias) cobram meses
+      por blocos que vivem horas. Backup frio em S3 remoto e tranquilo;
+      telemetria quente nao. Revisitar quando prod existir
+    - Datas sempre em UTC (timestamptz)
+
+  AMBIENTE DE DESENVOLVIMENTO
+    Separar sempre DUAS coisas que costumam ser confundidas:
+      [1] PROPRIEDADES DA PLATAFORMA -- iguais em qualquer host, vivem
+          no overlay dev versionado
+      [2] PRE-REQUISITOS DO HOST     -- variam por sistema operacional,
+          vivem na documentacao de onboarding
+
+    REQUISITOS DO CLUSTER (comuns a qualquer host)
+    - k3s local com versao fixada
+    - classe de armazenamento local padrao do cluster; os manifests NAO
+      referenciam outra nem apontam para diretorio do host
+    - memoria, CPU e disco suficientes para a plataforma completa
+    - a aplicacao roda no MESMO host do cluster e alcanca os servicos por
+      endereco local
+    - NENHUM manifest pode codificar caminho do host, nome de maquina,
+      endereco de instalacao particular ou recurso exclusivo de uma forma
+      de obter o cluster. O overlay dev deve subir em qualquer cluster
+      k3s conforme, independente do sistema operacional
+
+    PRE-REQUISITOS POR HOST (documentar por sistema, com o sintoma de
+    cada um quando ausente)
+    - Linux nativo: k3s instala direto; atencao ao espaco em disco dos
+      volumes. Os itens abaixo NAO se aplicam
+    - Windows com WSL2 (k3s nao roda nativamente no Windows):
+        * systemd habilitado em /etc/wsl.conf, senao o cluster nao sobe
+          sozinho a cada sessao
+        * o REPOSITORIO deve ficar no filesystem do WSL (~/), nunca em
+          /mnt/c: o acesso ao disco do Windows usa 9p e deixa build e
+          watch dramaticamente mais lentos
+        * memoria e CPU fixadas em .wslconfig: por padrao o WSL2 toma
+          ate metade da RAM, e a stack e pesada
+        * o VHDX CRESCE E NAO ENCOLHE sozinho; PVCs vivem nele e a
+          telemetria escreve sem parar, entao retencao curta e compactor
+          ligado sao requisito de sobrevivencia, e a compactacao manual
+          do VHDX precisa ser conhecida
+    - macOS NAO esta coberto: exigiria virtualizacao, com implicacoes
+      proprias de compartilhamento de arquivos e memoria. Declarar a
+      ausencia explicitamente, em vez de omitir
+
+    LOOP DE DESENVOLVIMENTO
+    - A APLICACAO NAO RODA NO CLUSTER EM DEV. Roda com `dotnet watch` /
+      F5 no proprio host, ao lado do k3s: loop de ~1s, debugger anexado
+      direto, sem build de imagem nem rollout. O namespace da app existe
+      nos manifests com replicas=0 em dev
+    - Tilt esta ADIADO. Entra depois, como otimizacao, se e quando rodar
+      a app dentro do cluster incomodar
+    - Verificacao periodica de "deploy completo" (replicas=1 + sync)
+      antes de fechar uma change, ja que o dia a dia nao exercita a
+      imagem nem os manifests da app
+
+  GITOPS E AMBIENTES
+    - ArgoCD, 100% declarativo. Nada de kubectl apply imperativo: o
+      agente reverte drift, e Git e a fonte da verdade
+    - Estrutura: deploy/base + deploy/overlays/{dev,prod} (Kustomize).
+      A diferenca dev/prod vira estrutura de diretorio versionada
+    - Segredos: Sealed Secrets. O controller e os CRDs precisam existir
+      ANTES de qualquer SealedSecret, senao os objetos ficam parados sem
+      virar Secret e o erro nao e obvio
+    - GOTCHA DE DEV: a chave de selagem e POR CLUSTER. Recriar o k3s gera
+      par novo e TODOS os SealedSecrets do repo ficam indecifraveis
+      ("recriei o cluster e nada sobe"). A chave de selagem de dev nao
+      tem valor e deve ser versionada e restaurada no bootstrap, para o
+      ambiente continuar recriavel do zero
+    - Escopo padrao de SealedSecret e "strict": amarrado a nome e
+      namespace. Renomear ou mover quebra a decifragem
+    - App le segredo sempre de Secret, nunca de env hardcoded no
+      Deployment, para que prod so troque a origem do Secret
+    - ORDENACAO POR SYNC WAVES:
+        -4  namespaces, CRDs, controller do Sealed Secrets,
+            operator do CloudNativePG
+        -3  objetos SealedSecret
+        -2  MinIO, Valkey, Cluster do CNPG
+        -1  Job idempotente que cria buckets e chaves no MinIO
+            (Loki/Tempo/Mimir NAO criam bucket e falham sem ele)
+         0  Alloy, Loki, Tempo, Mimir, Grafana
+         1  vendas-api (replicas=0 em dev)
+      Verificar se o ArgoCD tem health check para os CRDs usados
+      (ex: Cluster do CNPG); sem isso a wave avanca cedo demais e o
+      Job seguinte falha por corrida
+    - MIGRATIONS: Job anotado como hook PreSync, com hook-delete-policy
+      BeforeHookCreation (Job e imutavel; sem isso o segundo sync falha).
+      Se o hook falha, o sync inteiro falha e o Deployment antigo segue
+      rodando -- nao existe rollout contra schema errado. Um Job por
+      modulo, mesma wave (schemas independentes)
+    - EXPAND/CONTRACT E OBRIGATORIO: no PreSync o schema NOVO ja esta
+      aplicado enquanto os pods ANTIGOS ainda rodam. Toda migration e
+      aditiva; remocao vem em release posterior. Renomear coluna sao tres
+      releases (add + escreve nos dois / le do novo / drop). Proibido
+      numa unica release: DROP, RENAME, NOT NULL sem default, mudanca de
+      tipo incompativel
+    - Usar `dotnet ef migrations bundle`: executavel self-contained, para
+      a imagem do Job nao precisar do SDK nem do dotnet-ef
+    - IMAGENS: tag por git SHA (imutavel e rastreavel ate o commit),
+      atualizada no manifest por script/manual enquanto a frequencia de
+      deploy for baixa (em dev a app roda fora do cluster, entao build de
+      imagem e raro). Automacao de write-back (CI ou ArgoCD Image
+      Updater em modo git write-back) fica para quando houver CI e prod.
+      Nunca tag mutavel como latest: o Git nao muda, o Argo nao ve diff e
+      nao ha rollout nem rollback
+    - Em dev pode-se dispensar registry injetando a imagem direto no
+      containerd do k3s (`k3s ctr images import`); nesse caso
+      imagePullPolicy deve ser IfNotPresent, nunca Always
+    - Repo unico (app + deploy/) por simplicidade; se o CI passar a
+      commitar a tag, usar path filter para nao disparar loop de CI
+
+  CROSS-CUTTING (SharedKernel)
+    - Auditoria: criado_em/criado_por, alterado_em/alterado_por na entidade
+      base, preenchidos por EF interceptor. Trilha imutavel fiscal fica
+      para o Financeiro, depois
+    - Concorrencia otimista: xmin do Postgres como concurrency token
+      (nativo no Npgsql, sem coluna extra) -> HTTP 409
+    - Dinheiro: value object Dinheiro, numeric(19,4) no banco,
+      arredondamento explicito apenas na totalizacao (nunca intermediario)
+    - Sem delete fisico em Cadastro: flag ativo + query filter global
+    - Paginacao: offset com envelope padrao (items, total, page, size);
+      cursor apenas se surgir listagem realmente grande
+    - Testes: Domain com unit test puro; Application e Infrastructure com
+      Testcontainers (Postgres e MinIO reais, nunca InMemory: presigned e
+      comportamento de S3 nao existem em adapter de disco); fronteiras de
+      modulo e regra vertical com NetArchTest
+
+  PROPRIEDADES DE DEV QUE NAO VALEM EM PROD
+    Devem estar escritas no design para ninguem confundir dev com prod:
+    - MinIO single-node, sem redundancia; HTTP sem TLS
+    - chaves de acesso fixas versionadas no repo
+    - chave de selagem do Sealed Secrets versionada
+    - backup do Postgres no MESMO disco do Postgres: disco morre e
+      perde banco E backup. NAO e backup; serve para exercitar PITR
+    - /dev/token como emissor de JWT
+    - retencao curta de telemetria; Loki/Tempo/Mimir monoliticos
+    - app rodando fora do cluster
+
+  NON-GOALS ATUAIS
+    - Keycloak como IdP (adiado para change propria; o pipeline de
+      autorizacao ja nasce pronto para receber)
+    - Refresh token, logout, gestao de usuarios
+    - Presigned upload direto do cliente
+    - Tilt no loop de desenvolvimento
+    - Automacao de write-back de tag de imagem
+    - Fiscal brasileiro (NF-e, ICMS, PIS/COFINS)
+    - Versionamento de API
+    - Multi-tenant SaaS (a escolha e multi-filial de uma unica empresa)
+
+  REPOSITORIO E VERSIONAMENTO
+    - MONOREPO unico: codigo, deploy e openspec no mesmo repositorio
+      Nome: erp-comercial
+    - Justificativa: o sistema e um monolito modular, ou seja UM
+      artefato implantavel. Repo por modulo exigiria publicar pacote
+      entre modulos e transformaria uma alteracao que atravessa
+      Contracts em dois PRs -- o custo de microsservicos sem nenhum
+      dos beneficios
+    - deploy/ fica em PRIMEIRO NIVEL, nunca dentro de src/, para que
+      `git subtree split --prefix=deploy` extraia a config para repo
+      proprio com historico preservado, caso um dia isso valha
+    - Separar em repo de config so passa a valer quando alguem que nao
+      escreve codigo precisar alterar manifesto, ou quando houver CI
+      registrando tag de imagem
+    - openspec/ vive no mesmo repositorio: permite ver, num commit, a
+      spec e o codigo que a cumpre
+
+    ESTRUTURA
+      erp-comercial/
+        .gitignore  .editorconfig
+        Directory.Build.props        versao, nullable, warnings-as-errors
+        Directory.Packages.props     versao central de pacotes
+        Erp.sln
+        src/
+          SharedKernel/  Platform/  Api/
+          Modules/  Cadastro/ Estoque/ Vendas/ Financeiro/
+        tests/
+          Architecture/  <Modulo>.Tests/
+        deploy/
+          bootstrap/  base/  overlays/{dev,prod}/
+        openspec/
+        docs/
+
+    BRANCHES E COMMITS
+    - main + branches curtas nomeadas pela change OpenSpec:
+      change/<nome-da-change>  (ex: change/plataforma-gitops)
+      -> da rastreabilidade de branch -> proposal -> specs
+    - Conventional Commits, com escopo sendo o modulo ou a capability:
+      feat(estoque): ...   fix(vendas): ...   chore(deploy): ...
+      docs(openspec): ...  test(cadastro): ...  refactor(platform): ...
+    - Tags de release ADIADAS: um deployable unico teria uma versao so,
+      e versionar sem producao e cerimonia vazia. O SHA da imagem ja
+      responde "o que esta rodando". Semver comeca quando houver algo
+      a promover
+
+  NOMENCLATURA
+    REGRA GERAL: a ESTRUTURA e em ingles, o DOMINIO e em portugues.
+    Termo tecnico em ingles; vocabulario de negocio em portugues,
+    porque ele e o ativo mais valioso do sistema.
+
+    - Prefixo de assembly: Erp
+        Erp.SharedKernel
+        Erp.Platform
+        Erp.Modules.Cadastro
+        Erp.Modules.Estoque
+        Erp.Modules.Vendas
+        Erp.Modules.Financeiro
+        Erp.Api
+        Erp.Tests.Architecture
+    - O segmento `Modules` NAO e decoracao: ele torna a regra de
+      fronteira expressavel como predicado de namespace no arch test
+      ("tipos em Modules.X nao referenciam Modules.Y, exceto sob
+      Modules.Y.Contracts"). Sem ele, a regra vira lista de nomes que
+      alguem esquece de atualizar ao criar um modulo
+    - Trocar o prefixo depois e refactor global: decidir uma vez
+    - Schemas Postgres espelham o nome do projeto, em minusculas:
+        platform, cadastro, estoque, vendas, financeiro
+    - Namespaces k8s (tecnicos, em ingles):
+        argocd, sealed-secrets, data (postgres, valkey),
+        storage (minio), observability, app
+    - Imagem: erp-comercial/api:sha-<git-sha>. Um so deployable,
+      um so nome de imagem
+    - Nome do repositorio evita nomear o sistema pelo modulo mais
+      visivel: "vendas" e um de quatro modulos, e o nome mentiria
+      sobre o escopo
+
+  IDIOMA
+    - Artefatos OpenSpec e documentacao em portugues (pt-BR)
+    - Codigo, identificadores e nomes de arquivo em portugues quando
+      expressam o dominio; termos tecnicos em ingles
+
+rules:
+  proposal:
+    - Declare explicitamente os non-goals; o escopo de ERP tende a vazar
+    - Nao inclua regra de negocio de modulo em changes de plataforma
+  design:
+    - Justifique cada decisao com a consequencia que ela evita
+    - Diagramas em ASCII puro (+ - | --> ^ v), sem glifos Unicode
+    - Registre alternativas consideradas e por que foram recusadas
+    - Separe explicitamente o que e propriedade de dev do que vale em prod
+  specs:
+    - Requisitos de consistencia eventual devem declarar a semantica
+      de entrega (at-least-once) e a exigencia de idempotencia
+    - Requisitos que envolvam varias replicas devem declarar se a entrega
+      e competing consumers ou broadcast
+  tasks:
+    - Cada task deve ser verificavel de forma independente
+    - Toda slice nova deve nascer com arch test cobrindo sua fronteira

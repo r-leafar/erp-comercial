@@ -1,0 +1,79 @@
+# ---------------------------------------------------------------
+# .NET
+# ---------------------------------------------------------------
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+*.suo
+*.userprefs
+*.dll
+*.exe
+*.pdb
+project.lock.json
+.packages/
+*.nupkg
+!**/packages/build/
+TestResults/
+coverage*
+*.trx
+BenchmarkDotNet.Artifacts/
+
+# ---------------------------------------------------------------
+# IDE
+# ---------------------------------------------------------------
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.swp
+*~
+
+# ---------------------------------------------------------------
+# Sistema operacional
+# ---------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------
+# Kubernetes e ferramentas de cluster
+# Contexto de cluster carrega credencial: nunca versionar.
+# ---------------------------------------------------------------
+kubeconfig
+*.kubeconfig
+.kube/
+*.tmp.yaml
+charts/*.tgz
+
+# ---------------------------------------------------------------
+# Segredos
+#
+# Segredo so entra no repositorio em forma CIFRADA (Sealed Secrets).
+# As regras abaixo bloqueiam o formato NAO cifrado, mesmo por descuido.
+# A chave de selagem de DESENVOLVIMENTO e excecao deliberada: ela nao
+# protege nada de valor e precisa ser versionada para que o ambiente
+# continue recriavel apos recriar o cluster.
+# ---------------------------------------------------------------
+*.key
+*.pem
+*.pfx
+*.p12
+.env
+.env.*
+!.env.example
+secret*.yaml
+!sealed-secret*.yaml
+!deploy/bootstrap/chave-selagem-dev.yaml
+
+# ---------------------------------------------------------------
+# Local
+# ---------------------------------------------------------------
+*.local
+*.local.*
+tmp/
+.tmp/

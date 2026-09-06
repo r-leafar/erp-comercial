@@ -1,0 +1,37 @@
+# Normaliza fim de linha no repositorio.
+# Sem isso, arquivo commitado do Windows carrega CRLF e, no Linux/WSL,
+# script falha com "bad interpreter: /bin/bash^M" -- erro que nao diz
+# nada sobre fim de linha. A change plataforma-gitops tem procedimento
+# de bootstrap em shell, entao isto e pre-requisito, nao preferencia.
+* text=auto eol=lf
+
+# Precisam de LF mesmo em checkout no Windows
+*.sh        text eol=lf
+*.bash      text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+Dockerfile  text eol=lf
+*.dockerfile text eol=lf
+
+# Precisam de CRLF
+*.ps1       text eol=crlf
+*.cmd       text eol=crlf
+*.bat       text eol=crlf
+
+# Binarios: nunca normalizar
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.zip       binary
+*.gz        binary
+*.tar       binary
+*.dll       binary
+*.exe       binary
+*.snk       binary
+
+# Diff mais legivel para solution e projeto
+*.sln       text eol=crlf merge=union
+*.csproj    text eol=lf
