@@ -28,10 +28,11 @@ observabilidade (change seguinte) nem aplicacao (a terceira).
   verdade do estado do cluster. Nenhum `kubectl apply` imperativo. Drift e
   revertido pelo proprio agente.
 - **Bootstrap por scripts especializados.** A fatia imperativa que antecede o
-  GitOps (criar o cluster, instalar o ArgoCD, restaurar a chave de selagem,
-  apontar a aplicacao raiz) e dividida em um script por responsabilidade,
-  chamados em ordem por um unico orquestrador (`deploy/bootstrap/bootstrap.sh`).
-  Nenhuma ferramenta externa de infraestrutura como codigo entra nesta change.
+  GitOps (criar o cluster, instalar o Podman, instalar o ArgoCD, restaurar a
+  chave de selagem, apontar a aplicacao raiz) e dividida em um script por
+  responsabilidade, chamados em ordem por um unico orquestrador
+  (`deploy/bootstrap/bootstrap.sh`). Nenhuma ferramenta externa de
+  infraestrutura como codigo entra nesta change.
 - **Estrutura de deploy versionada** em `deploy/base` + `deploy/overlays/{dev,prod}`
   (Kustomize). A diferenca entre ambientes deixa de ser conhecimento tacito e
   vira estrutura de diretorio.
@@ -120,10 +121,10 @@ Nenhuma. O repositorio nao possui specs anteriores.
   plataforma.
 - `deploy/bootstrap/`: unico ponto de partida imperativo, executado uma vez por
   cluster — um script por responsabilidade (criacao do cluster, instalacao do
-  ArgoCD, restauracao da chave de selagem de dev, aplicacao da Application
-  raiz), chamados em ordem por um orquestrador unico. Um script simetrico
-  desfaz a criacao do cluster, para que a recriacao do zero seja verificavel
-  sem passo manual.
+  Podman, instalacao do ArgoCD, restauracao da chave de selagem de dev,
+  aplicacao da Application raiz), chamados em ordem por um orquestrador
+  unico. Um script simetrico desfaz a criacao do cluster, para que a
+  recriacao do zero seja verificavel sem passo manual.
 - Documentacao de requisitos do cluster local, comum a qualquer host, mais uma
   secao de pre-requisitos por sistema operacional do desenvolvedor.
 - `docs/convencoes.md`: monorepo e sua justificativa, prefixo de assembly,
