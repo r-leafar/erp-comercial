@@ -49,6 +49,12 @@ verificacao esta escrito junto quando nao e obvio.
       parte do orquestrador `bootstrap.sh`. Verificacao: apos executa-lo, a
       maquina volta ao estado anterior a criacao do cluster, sem processo do
       k3s residual.
+- [ ] 2.8 Escrever o script `deploy/bootstrap/install-podman.sh` (D15), que
+      instala o Podman nativamente (rootless), fixando a versao, e ativa o
+      soquete compativel com a API do Docker
+      (`systemctl --user enable --now podman.socket`). Chamado pelo
+      orquestrador `bootstrap.sh`. Verificacao: idempotente — executar duas
+      vezes sem erro; `podman info` responde sem `sudo` apos a execucao.
 
 ## 3. Documentacao de pre-requisitos por sistema operacional
 
@@ -160,10 +166,11 @@ verificacao esta escrito junto quando nao e obvio.
       consumidores concorrentes, com a advertencia de que trocar um pelo outro
       nao falha com uma replica e falha silenciosamente com varias.
 - [ ] 9.7 Escrever o script orquestrador `deploy/bootstrap/bootstrap.sh`, que
-      chama, nesta ordem, `install-cluster.sh` (2.6), `install-argocd.sh`
-      (5.1), `restore-sealing-key.sh` (6.3) e `apply-root-app.sh` (5.2). So
-      decide a ordem; nenhuma logica de instalacao de ferramenta vive nele.
-      Pre-requisito: os quatro scripts chamados ja precisam existir.
+      chama, nesta ordem, `install-cluster.sh` (2.6), `install-podman.sh`
+      (2.8), `install-argocd.sh` (5.1), `restore-sealing-key.sh` (6.3) e
+      `apply-root-app.sh` (5.2). So decide a ordem; nenhuma logica de
+      instalacao de ferramenta vive nele. Pre-requisito: os cinco scripts
+      chamados ja precisam existir.
 
 ## 10. Verificacao de ponta a ponta
 

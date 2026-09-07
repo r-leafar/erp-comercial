@@ -84,11 +84,12 @@ falhar, e nao ha como recriar o ambiente com confianca.
   que torna a ordenacao e o estado de sincronizacao observaveis enquanto a
   equipe aprende o modelo. E uma decisao de didatica, nao de capacidade.
 
-**Fronteira imperativa aceita.** A criacao do proprio cluster, a instalacao do
+**Fronteira imperativa aceita.** A criacao do proprio cluster, a instalacao de
+ferramentas de host que o fluxo de desenvolvimento precisa, a instalacao do
 agente e a restauracao do material de decifragem sao imperativas por
 natureza. Ficam isoladas em um procedimento de bootstrap unico, executado uma
 vez por cluster, versionado em `deploy/bootstrap/` (a forma desse
-procedimento e detalhada em D14).
+procedimento e detalhada em D14; as ferramentas de host, em D15).
 
 ### D2. Estrutura de repositorio: base unica com sobreposicao por ambiente
 
@@ -486,9 +487,10 @@ atualizacao passa a ser automatica, sem alterar nada do que e definido aqui.
 
 ### D14. Bootstrap por scripts especializados, sem ferramenta de infraestrutura declarativa
 
-**Decisao.** A fatia imperativa aceita em D1 (criar o cluster e instalar o
-que o GitOps ainda nao pode gerenciar) e implementada por scripts simples,
-um por responsabilidade, chamados em ordem por um unico orquestrador. Nenhuma
+**Decisao.** A fatia imperativa aceita em D1 (criar o cluster, instalar
+ferramenta de host que o desenvolvimento precisa, e instalar o que o GitOps
+ainda nao pode gerenciar) e implementada por scripts simples, um por
+responsabilidade, chamados em ordem por um unico orquestrador. Nenhuma
 ferramenta externa de infraestrutura como codigo entra nesta change.
 
 ```
@@ -497,6 +499,8 @@ ferramenta externa de infraestrutura como codigo entra nesta change.
        |                       nao contem logica de instalacao propria
        +--> install-cluster.sh      cria o cluster k3s (por sistema
        |                            operacional, versao fixada)
+       +--> install-podman.sh       instala o motor de container do host
+       |                            (D15), fixando a versao
        +--> install-argocd.sh       instala o agente de reconciliacao
        +--> restore-sealing-key.sh  restaura a chave de selagem de dev
        +--> apply-root-app.sh       aplica a Application raiz
@@ -509,8 +513,15 @@ ferramenta externa de infraestrutura como codigo entra nesta change.
                                 existir). Destruir o cluster remove tudo
                                 que estava dentro dele; nao ha por-
                                 ferramenta para desinstalar, so o par
-                                criar/destruir do cluster em si.
+                                criar/destruir do cluster em si. Podman
+                                fica de fora deste par: nao pertence ao
+                                ciclo de vida do cluster.
 ```
+
+**Padrao extensivel.** Uma necessidade nova de ferramenta de host segue
+sempre o mesmo molde: um script novo, com uma unica responsabilidade,
+adicionado a chamada do orquestrador. O orquestrador em si nao cresce em
+complexidade — so em numero de linhas de chamada.
 
 **Consequencia que evita.** Um unico script monolitico onde a ordem entre
 responsabilidades fica implicita no meio de linhas de instalacao de
@@ -554,6 +565,46 @@ desenvolvimento. Producao — gerenciada ou on-premise — continua non-goal
 desta change (ja declarado no proposal). Se um dia existir mais de um
 cluster real para manter, Cluster API volta a ser a opcao a reconsiderar,
 porque o par gerenciado/on-premise ja e coberto pelo mesmo modelo.
+
+### D15. Motor de container para build de imagem: Podman nativo, rootless, sem GUI
+
+**Decisao.** Construir e inspecionar a imagem da aplicacao (D12) usa Podman
+instalado nativamente na distro de desenvolvimento, em modo rootless, sem
+Podman Desktop. A instalacao e feita por `install-podman.sh`, chamado pelo
+orquestrador `bootstrap.sh` (D14) — nao e passo manual documentado. A imagem
+chega ao k3s por `podman save <imagem> | sudo k3s ctr images import -`.
+
+**Consequencia que evita.** Rodar dois motores de container ao mesmo tempo
+(um para build, outro exigido pelos testes com dependencia real), ou pagar o
+custo de uma VM WSL2 dedicada rodando o tempo todo, num host onde memoria ja
+e recurso disputado (D11).
+
+**Alternativas recusadas.**
+
+- *Docker Desktop com integracao WSL.* Mantem um app Windows e uma VM WSL2
+  propria e oculta rodando em segundo plano, alem da distro de trabalho —
+  o maior custo de RAM entre as opcoes consideradas.
+- *Docker Engine nativo no WSL.* Resolveria build e testes igualmente bem,
+  mas depende de um daemon com privilegio de root sempre ativo; nao oferece
+  o modelo rootless que o Podman oferece pelo mesmo esforco de instalacao.
+- *nerdctl + buildkit, contra o containerd do proprio k3s.* Evitaria
+  qualquer motor adicional, mas nao expoe um soquete compativel com a API do
+  Docker. Testes de Application/Infrastructure (change `fundacao-aplicacao`)
+  usam Testcontainers, que fala exatamente esse protocolo — sem ponte
+  oficial: pedido aberto no proprio testcontainers-dotnet (issue #819) segue
+  sem solucao.
+- *Podman Desktop.* Por padrao cria sua propria VM WSL2 ("Podman Machine") e
+  nao gerencia o Podman ja instalado nativamente na distro de trabalho —
+  usa-lo reintroduziria o mesmo custo de VM extra rejeitado no Docker
+  Desktop.
+
+**Consequencia aceita.** Gerenciamento apenas por linha de comando (`podman
+ps`, `podman images`, etc.), sem painel visual.
+
+**Nota para `fundacao-aplicacao`.** O mesmo Podman, no mesmo modo rootless,
+ja satisfaz o soquete compativel com a API do Docker que o Testcontainers
+exige — nenhum motor adicional e necessario para os testes de
+Application/Infrastructure.
 
 ## Risks / Trade-offs
 
