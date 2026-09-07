@@ -20,7 +20,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: provision
-          image: minio/mc:RELEASE.2026-08-19T18-45-13Z
+          image: minio/mc:RELEASE.2025-08-13T08-35-41Z
           command: ["/bin/sh", "/scripts/provision.sh"]
           envFrom:
             - secretRef:

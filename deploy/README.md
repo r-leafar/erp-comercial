@@ -33,7 +33,10 @@ hospeda.
 | k3s | `v1.36.4+k3s1` | `deploy/bootstrap/install-cluster.sh` |
 | ArgoCD | `v3.5.2` | `deploy/bootstrap/install-argocd.sh` |
 | Sealed Secrets (controller) | `v0.39.1` | `deploy/base/plataforma/sealed-secrets/` |
-| CloudNativePG (operator) | `v1.30.0` | `deploy/base/plataforma/postgres/` |
+| CloudNativePG (operator) | `v1.30.0` | `deploy/base/plataforma/cnpg-operator/` |
+| MinIO | `RELEASE.2025-09-07T16-13-09Z` | `deploy/base/plataforma/minio/deployment.yaml` |
+| MinIO Client (`mc`, job de buckets) | `RELEASE.2025-08-13T08-35-41Z` | `deploy/base/plataforma/minio-provision/buckets-job.yaml` |
+| Valkey | `8.1-alpine` | `deploy/base/plataforma/valkey/deployment.yaml` |
 | Podman | a que o gerenciador de pacotes da distro oferecer (sem pin reproduzivel — ver nota em `install-podman.sh`) | `deploy/bootstrap/install-podman.sh` |
 
 Atualizar aqui e no script/manifesto correspondente juntos quando houver
