@@ -62,7 +62,7 @@ Leia primeiro os requisitos comuns acima; depois, so a secao do seu sistema.
 
 ### Windows com WSL2
 
-k3s nao roda nativamente no Windows — precisa do WSL2. Quatro
+k3s nao roda nativamente no Windows — precisa do WSL2. Seis
 pre-requisitos, cada um com um sintoma que **nao aponta para a causa** se
 ficar ausente:
 
@@ -73,11 +73,15 @@ ficar ausente:
 | Memoria e CPU fixadas em `%UserProfile%\.wslconfig` | Por padrao o WSL2 toma ate metade da RAM do host | Maquina do desenvolvedor fica inutilizavel durante o trabalho normal |
 | Compactacao periodica do VHDX conhecida (`diskpart` / `wsl --manage <distro> --shrink`, conforme a versao do WSL) | O VHDX cresce e **nao encolhe sozinho**; volumes de plataforma e telemetria escrevem sem parar | Disco do host se esgota, mesmo com espaco "liberado" dentro da distro |
 | `loginctl enable-linger` para o seu usuario | `systemd=true` liga o systemd de SISTEMA (o que o k3s usa); o gerenciador de usuario (o que `systemctl --user` usa, exigido pelo soquete rootless do Podman) so nasce sozinho com o lingering habilitado | `Failed to connect to user scope bus via local transport: $DBUS_SESSION_BUS_ADDRESS and $XDG_RUNTIME_DIR not defined` -- nao menciona linger nem systemd de usuario em lugar nenhum |
+| Binarios em Go precisam do resolvedor DNS via `cgo` (`GODEBUG=netdns=cgo`), nao do resolvedor puro do Go | O `/etc/resolv.conf` gerado pelo WSL2 aponta para o gateway virtual da distro; o resolvedor puro do Go nao consegue usa-lo (mesmo endereco sendo alcancavel por `curl`/glibc) | `lookup <host> on <ip>:53: no such host`, tanto em ferramentas rodadas no host (`kustomize build` contra recurso remoto) quanto em pods (`argocd-repo-server` ao clonar o repositorio) -- a mensagem no aponta para WSL2 nem para Go |
 
-`install-podman.sh` detecta a ausencia e habilita o lingering sozinho, mas
-a sessao de shell **atual** ja nasceu sem os `$XDG_RUNTIME_DIR`/
+`install-podman.sh` detecta a ausencia de lingering e o habilita sozinho,
+mas a sessao de shell **atual** ja nasceu sem os `$XDG_RUNTIME_DIR`/
 `$DBUS_SESSION_BUS_ADDRESS` corretos -- feche o terminal e abra um novo (ou
 `wsl --shutdown` no Windows) antes de rodar o script de novo.
+`install-argocd.sh` ja aplica o contorno de DNS no `argocd-repo-server`;
+se outro componente futuro tambem precisar sair para a internet (não
+apenas para o cluster), o mesmo `GODEBUG=netdns=cgo` resolve.
 
 Exemplo de `/etc/wsl.conf`:
 
