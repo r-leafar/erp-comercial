@@ -13,7 +13,13 @@ kctl() { sudo k3s kubectl "$@"; }
 
 log "Instalando ArgoCD ${ARGOCD_VERSION}..."
 kctl create namespace argocd --dry-run=client -o yaml | kctl apply -f -
-kctl apply -n argocd -f "$MANIFEST_URL"
+
+# --server-side: a CRD do ApplicationSet e grande o bastante para estourar
+# o limite de 256 KiB da anotacao last-applied-configuration que o apply
+# client-side (padrao) usa para calcular diff. Server-side apply nao
+# depende dessa anotacao. --force-conflicts mantem a reexecucao idempotente
+# mesmo que o field manager mude entre versoes do kubectl.
+kctl apply -n argocd --server-side --force-conflicts -f "$MANIFEST_URL"
 
 log "Aguardando os deployments do ArgoCD ficarem disponiveis..."
 kctl -n argocd wait --for=condition=available --timeout=300s deployment --all

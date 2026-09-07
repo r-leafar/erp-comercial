@@ -21,3 +21,9 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      # As CRDs do CloudNativePG e do Sealed Secrets sao grandes o
+      # bastante para estourar o limite de 256 KiB da anotacao
+      # last-applied-configuration que o apply client-side (padrao)
+      # usa -- mesmo problema corrigido em install-argocd.sh, so que
+      # dentro do proprio ArgoCD. Server-side apply nao depende dela.
+      - ServerSideApply=true
