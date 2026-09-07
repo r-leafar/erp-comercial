@@ -39,6 +39,16 @@ verificacao esta escrito junto quando nao e obvio.
       cache e armazenamento por endereco local.
 - [ ] 2.5 Confirmar que o cluster sobe sozinho apos reinicio do host, sem comando
       manual.
+- [ ] 2.6 Escrever o script `deploy/bootstrap/install-cluster.sh`, que cria o
+      cluster k3s por sistema operacional, fixando a versao definida em 2.1.
+      Verificacao: idempotente — executar duas vezes sem erro e sem recriar o
+      que ja existe.
+- [ ] 2.7 Escrever o script `deploy/bootstrap/destroy-cluster.sh`, que desfaz
+      exatamente o que `install-cluster.sh` criou, por sistema operacional
+      (delegando ao desinstalador oficial do k3s quando ele existir). Nao faz
+      parte do orquestrador `bootstrap.sh`. Verificacao: apos executa-lo, a
+      maquina volta ao estado anterior a criacao do cluster, sem processo do
+      k3s residual.
 
 ## 3. Documentacao de pre-requisitos por sistema operacional
 
@@ -72,9 +82,11 @@ verificacao esta escrito junto quando nao e obvio.
 
 ## 5. Agente de reconciliacao (ArgoCD)
 
-- [ ] 5.1 Escrever o procedimento de bootstrap que instala o agente. Deve ser
-      idempotente e ser a unica parte imperativa do processo.
-- [ ] 5.2 Declarar a aplicacao raiz que aponta para `deploy/overlays/dev`.
+- [ ] 5.1 Escrever o script `deploy/bootstrap/install-argocd.sh`, que instala
+      o agente. Deve ser idempotente.
+- [ ] 5.2 Escrever o script `deploy/bootstrap/apply-root-app.sh`, que declara
+      e aplica a aplicacao raiz apontando para `deploy/overlays/dev`, chamado
+      pelo orquestrador ao final da sequencia.
 - [ ] 5.3 Verificar reversao de divergencia: alterar um recurso diretamente no
       cluster e confirmar que o estado declarado e restaurado sozinho.
 - [ ] 5.4 Verificar deteccao de estado invalido: introduzir uma declaracao
@@ -90,11 +102,14 @@ verificacao esta escrito junto quando nao e obvio.
 - [ ] 6.2 Gerar e versionar a chave de selagem de desenvolvimento, deixando
       escrito que ela nao protege nada de valor e que em producao o tratamento e
       outro.
-- [ ] 6.3 Incluir a restauracao da chave no procedimento de bootstrap.
+- [ ] 6.3 Escrever o script `deploy/bootstrap/restore-sealing-key.sh`, que
+      restaura a chave, chamado pelo orquestrador antes de qualquer
+      `SealedSecret` ser aplicado.
 - [ ] 6.4 Criar os segredos cifrados de banco, cache e armazenamento.
-- [ ] 6.5 **Verificar a recriacao completa**: destruir o cluster, executar o
-      bootstrap e confirmar que os segredos ja versionados continuam sendo
-      decifrados. Sem esta verificacao a capacidade nao esta entregue.
+- [ ] 6.5 **Verificar a recriacao completa**: executar `destroy-cluster.sh`,
+      depois `bootstrap.sh`, e confirmar que os segredos ja versionados
+      continuam sendo decifrados. Sem esta verificacao a capacidade nao esta
+      entregue.
 - [ ] 6.6 Confirmar o comportamento de vinculo: apontar um segredo cifrado para
       nome ou espaco de nomes diferente e conferir que a decifragem falha.
 
@@ -144,15 +159,22 @@ verificacao esta escrito junto quando nao e obvio.
 - [ ] 9.6 Registrar em `deploy/README.md` a distincao entre broadcast e
       consumidores concorrentes, com a advertencia de que trocar um pelo outro
       nao falha com uma replica e falha silenciosamente com varias.
+- [ ] 9.7 Escrever o script orquestrador `deploy/bootstrap/bootstrap.sh`, que
+      chama, nesta ordem, `install-cluster.sh` (2.6), `install-argocd.sh`
+      (5.1), `restore-sealing-key.sh` (6.3) e `apply-root-app.sh` (5.2). So
+      decide a ordem; nenhuma logica de instalacao de ferramenta vive nele.
+      Pre-requisito: os quatro scripts chamados ja precisam existir.
 
 ## 10. Verificacao de ponta a ponta
 
-- [ ] 10.1 **Destruir o cluster por completo e recria-lo do zero** executando
-      apenas o procedimento de bootstrap. Criterio de pronto da change: banco,
-      cache e armazenamento ficam disponiveis e configurados sem nenhum passo
-      manual fora do que esta versionado.
-- [ ] 10.2 Executar o bootstrap novamente sobre o ambiente ja provisionado e
-      confirmar que conclui sem erro e sem alterar dados.
+- [ ] 10.1 **Destruir o cluster por completo** executando
+      `deploy/bootstrap/destroy-cluster.sh` **e recria-lo do zero** executando
+      apenas `deploy/bootstrap/bootstrap.sh`. Criterio de pronto da change:
+      banco, cache e armazenamento ficam disponiveis e configurados sem
+      nenhum passo manual fora do que esta versionado.
+- [ ] 10.2 Executar `deploy/bootstrap/bootstrap.sh` novamente sobre o
+      ambiente ja provisionado e confirmar que conclui sem erro e sem alterar
+      dados — idempotencia de cada script individual, nao so do conjunto.
 - [ ] 10.3 Conferir a ordenacao observando as ondas: nenhum consumidor iniciou
       antes de seu pre-requisito estar utilizavel.
 - [ ] 10.4 Revisar `deploy/overlays/dev` e confirmar que toda propriedade que nao
