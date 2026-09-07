@@ -349,6 +349,20 @@ recusado**, nunca aplicado silenciosamente: o job de recuperacao falha com
 
 ## Acessando os paineis (ArgoCD, MinIO)
 
+**Se voce esta no Windows com WSL2, o navegador so funciona com
+`kubectl port-forward`. O `Ingress`/`nip.io` desta secao NAO abre no seu
+navegador — nao pule esta frase.**
+
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8080:80
+kubectl port-forward svc/minio -n storage 9001:9001
+```
+
+Depois, abra `http://localhost:8080` (ArgoCD) e `http://localhost:9001`
+(MinIO) no navegador do Windows normalmente.
+
+### Por que existe um Ingress, se o navegador do Windows nao usa
+
 O k3s ja traz um Ingress controller (Traefik, escutando nas portas 80/443
 do proprio host). `deploy/overlays/dev/ingress-argocd.yaml` e
 `ingress-minio.yaml` expoem os dois paineis por ele, de forma generica --
@@ -356,35 +370,33 @@ API padrao `networking.k8s.io/v1`, sem CRD nem anotacao especifica de
 controller, sem `ingressClassName` fixado (usa o default do cluster). Troque
 o Traefik por outro Ingress e o mesmo manifesto continua funcionando.
 
-**GOTCHA DE WSL2 (encontrado ao vivo): o Ingress funciona de dentro do
-WSL2, mas NAO chega ao navegador do Windows sem um passo a mais.** O
-encaminhamento automatico de `localhost` do WSL2 para o Windows so
-detecta portas com um socket de verdade em escuta (`ss -tln` mostra a
-porta). O klipper-lb do k3s (o que expoe a porta 80/443 do Traefik) e o
-`kube-proxy` (usado por qualquer `NodePort`, testado e confirmado a
-mesma limitacao) expoem porta por regra de `iptables`/NAT, sem socket
-literal -- `curl` de dentro do WSL2 funciona (o NAT se aplica a qualquer
-trafego dentro do mesmo namespace de rede), mas o encaminhamento
-automatico para o Windows nunca detecta a porta para encaminhar.
-
-**Para o navegador do Windows, o metodo confiavel continua sendo
-`kubectl port-forward`** (ele abre um socket de verdade, que o WSL2
-encaminha sem problema):
+**GOTCHA DE WSL2 (encontrado ao vivo, testado): o Ingress so responde a
+chamadas feitas de DENTRO do proprio WSL2 (`curl`, scripts, health check
+automatizado) — nunca ao navegador do Windows.** Nao existe cenario
+pratico de "abrir num navegador dentro do WSL2" aqui: seria preciso um
+navegador grafico rodando dentro da distro, o que este ambiente nao tem e
+nao faz sentido montar so para isso. Trate este Ingress como utilidade de
+linha de comando/automacao, nao como substituto do `port-forward` para
+navegacao.
 
 ```bash
-kubectl port-forward svc/argocd-server -n argocd 8080:80
-kubectl port-forward svc/minio -n storage 9001:9001
+curl http://argocd.127.0.0.1.nip.io/   # responde de dentro do WSL2
+curl http://minio.127.0.0.1.nip.io/    # responde de dentro do WSL2
 ```
 
-Os `Ingress` com `nip.io` (abaixo) continuam validos e portaveis -- funcionam
-sem ajuste em qualquer host Linux nativo, e de dentro do proprio WSL2 (uma
-`curl` ou um navegador rodando dentro da distro). So nao substituem o
-`port-forward` para navegador do Windows enquanto o host for WSL2.
+Causa raiz: o encaminhamento automatico de `localhost` do WSL2 para o
+Windows so detecta portas com um socket de verdade em escuta (`ss -tln`
+mostra a porta; `kubectl port-forward` cria um, confirmado). O klipper-lb
+do k3s (o que expoe a porta 80/443 do Traefik) e o `kube-proxy` (usado por
+qualquer `NodePort`, testado e confirmado a mesma limitacao) expoem porta
+por regra de `iptables`/NAT, sem socket literal -- por isso o `curl`
+funciona de dentro do WSL2 (o NAT se aplica a qualquer trafego dentro do
+mesmo namespace de rede) mas o encaminhamento automatico para o Windows
+nunca detecta a porta para encaminhar.
 
-```
-   ArgoCD:  http://argocd.127.0.0.1.nip.io/   (dentro do WSL2 ou Linux nativo)
-   MinIO:   http://minio.127.0.0.1.nip.io/    (dentro do WSL2 ou Linux nativo)
-```
+Em Linux nativo (sem WSL2 no meio), este mesmo Ingress abriria normalmente
+no navegador, sem nenhum ajuste — a limitacao e so do encaminhamento
+automatico do WSL2, nao do manifesto.
 
 **Por que o TLS do ArgoCD fica desligado
 (`deploy/bootstrap/argocd-insecure-patch.yaml`, aplicado por
