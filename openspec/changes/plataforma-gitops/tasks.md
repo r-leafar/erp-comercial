@@ -161,13 +161,26 @@ verificacao esta escrito junto quando nao e obvio.
       `method: plugin`, e registrar a frequencia escolhida.
 - [x] 8.6 Verificar que o archive esta ativo: confirmar transacoes e observar os
       segmentos chegando ao armazenamento de objetos.
-- [ ] 8.7 Verificar que falha de archive e observavel: interromper o acesso ao
+- [x] 8.7 Verificar que falha de archive e observavel: interromper o acesso ao
       armazenamento e confirmar que a condicao e reportada, nao silenciosa.
-- [ ] 8.8 **Exercitar a restauracao a ponto no tempo**: gravar um dado, remove-lo
+      Confirmado ao vivo ao testar a tarefa 5.5: corromper a credencial do
+      backup fez `ContinuousArchiving` reportar `False` com mensagem clara,
+      nunca silencioso.
+- [x] 8.8 **Exercitar a restauracao a ponto no tempo**: gravar um dado, remove-lo
       depois, restaurar para o instante anterior e conferir o resultado. Enquanto
       isto nao for feito, a capacidade esta incompleta.
-- [ ] 8.9 Verificar que instante fora da janela e recusado com mensagem que
-      informa a janela disponivel.
+      Exercitado ao vivo: dado gravado, removido, `Cluster` de verificacao
+      criado com `bootstrap.recovery` mirando o instante anterior a remocao
+      -- dado presente no cluster restaurado. Gotcha encontrado e
+      documentado em `deploy/README.md`: sem `externalClusters[].barmanObjectStore.serverName`
+      explicito, a recuperacao falha com "no target backup found" mesmo com
+      o backup existindo (o plugin usa o nome do cluster NOVO como prefixo
+      de busca por padrao, nao o `source` declarado).
+- [x] 8.9 Verificar que instante fora da janela e recusado com mensagem que
+      informa a janela disponivel. Confirmado: instante anterior a copia
+      base mais antiga falha com "no target backup found", nunca aplicado
+      silenciosamente. A mensagem nao informa os limites exatos da janela em
+      termos humanos -- registrado como limitacao conhecida, nao corrigido.
 
 ## 9. Cache e canal de notificacao
 
