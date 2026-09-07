@@ -72,6 +72,12 @@ ficar ausente:
 | Repositorio no filesystem do WSL (`~/...`), nunca em `/mnt/c/...` | Acesso ao disco do Windows via 9p e muito mais lento | Build, `dotnet watch` e deteccao de alteracao de arquivo ficam dramaticamente lentos |
 | Memoria e CPU fixadas em `%UserProfile%\.wslconfig` | Por padrao o WSL2 toma ate metade da RAM do host | Maquina do desenvolvedor fica inutilizavel durante o trabalho normal |
 | Compactacao periodica do VHDX conhecida (`diskpart` / `wsl --manage <distro> --shrink`, conforme a versao do WSL) | O VHDX cresce e **nao encolhe sozinho**; volumes de plataforma e telemetria escrevem sem parar | Disco do host se esgota, mesmo com espaco "liberado" dentro da distro |
+| `loginctl enable-linger` para o seu usuario | `systemd=true` liga o systemd de SISTEMA (o que o k3s usa); o gerenciador de usuario (o que `systemctl --user` usa, exigido pelo soquete rootless do Podman) so nasce sozinho com o lingering habilitado | `Failed to connect to user scope bus via local transport: $DBUS_SESSION_BUS_ADDRESS and $XDG_RUNTIME_DIR not defined` -- nao menciona linger nem systemd de usuario em lugar nenhum |
+
+`install-podman.sh` detecta a ausencia e habilita o lingering sozinho, mas
+a sessao de shell **atual** ja nasceu sem os `$XDG_RUNTIME_DIR`/
+`$DBUS_SESSION_BUS_ADDRESS` corretos -- feche o terminal e abra um novo (ou
+`wsl --shutdown` no Windows) antes de rodar o script de novo.
 
 Exemplo de `/etc/wsl.conf`:
 
