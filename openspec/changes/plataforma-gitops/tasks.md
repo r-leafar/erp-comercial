@@ -122,12 +122,17 @@ verificacao esta escrito junto quando nao e obvio.
       restaura a chave, chamado pelo orquestrador antes de qualquer
       `SealedSecret` ser aplicado.
 - [x] 6.4 Criar os segredos cifrados de banco, cache e armazenamento.
-- [ ] 6.5 **Verificar a recriacao completa**: executar `destroy-cluster.sh`,
+- [x] 6.5 **Verificar a recriacao completa**: executar `destroy-cluster.sh`,
       depois `bootstrap.sh`, e confirmar que os segredos ja versionados
       continuam sendo decifrados. Sem esta verificacao a capacidade nao esta
       entregue.
-- [ ] 6.6 Confirmar o comportamento de vinculo: apontar um segredo cifrado para
+      Executado de verdade pelo usuario: os 9 SealedSecrets ja versionados
+      decifraram sem excecao no cluster recriado do zero.
+- [x] 6.6 Confirmar o comportamento de vinculo: apontar um segredo cifrado para
       nome ou espaco de nomes diferente e conferir que a decifragem falha.
+      Testado ao vivo: renomear `valkey-credentials` para
+      `valkey-credentials-renomeado` (mesmo conteudo cifrado) resultou em
+      `ErrUnsealFailed`, `"no key could decrypt secret"` -- confirmado.
 
 ## 7. Armazenamento de objetos
 
@@ -185,13 +190,21 @@ verificacao esta escrito junto quando nao e obvio.
 ## 9. Cache e canal de notificacao
 
 - [x] 9.1 Declarar o Valkey com autenticacao, credencial vinda de segredo.
-- [ ] 9.2 Verificar que conexao sem credencial valida e recusada.
+- [x] 9.2 Verificar que conexao sem credencial valida e recusada. Confirmado
+      ao vivo: `NOAUTH Authentication required.` sem credencial; `PONG` com a
+      credencial correta.
 - [ ] 9.3 Verificar tolerancia a perda: esvaziar o cache por completo e confirmar
-      que nada alem de latencia muda.
-- [ ] 9.4 Verificar entrega em broadcast: publicar com dois ou mais assinantes
-      conectados e confirmar que **todos** recebem.
-- [ ] 9.5 Verificar a natureza efemera: publicar com um assinante desconectado e
-      confirmar que ele nao recebe a mensagem ao reconectar.
+      que nada alem de latencia muda. Nao testavel ainda: nao existe consumidor
+      de cache (nenhum codigo .NET nesta change, non-goal do proposal) --
+      "nada alem de latencia muda" so faz sentido com algo lendo atraves do
+      cache. Fica para a change `fundacao-aplicacao`.
+- [x] 9.4 Verificar entrega em broadcast: publicar com dois ou mais assinantes
+      conectados e confirmar que **todos** recebem. Confirmado ao vivo: dois
+      assinantes conectados, ambos receberam a mesma mensagem publicada.
+- [x] 9.5 Verificar a natureza efemera: publicar com um assinante desconectado e
+      confirmar que ele nao recebe a mensagem ao reconectar. Confirmado ao
+      vivo: assinante desconectado antes da publicacao, reconectado depois --
+      nao recebeu a mensagem perdida.
 - [x] 9.6 Registrar em `deploy/README.md` a distincao entre broadcast e
       consumidores concorrentes, com a advertencia de que trocar um pelo outro
       nao falha com uma replica e falha silenciosamente com varias.
@@ -204,16 +217,30 @@ verificacao esta escrito junto quando nao e obvio.
 
 ## 10. Verificacao de ponta a ponta
 
-- [ ] 10.1 **Destruir o cluster por completo** executando
+- [x] 10.1 **Destruir o cluster por completo** executando
       `deploy/bootstrap/destroy-cluster.sh` **e recria-lo do zero** executando
       apenas `deploy/bootstrap/bootstrap.sh`. Criterio de pronto da change:
       banco, cache e armazenamento ficam disponiveis e configurados sem
       nenhum passo manual fora do que esta versionado.
-- [ ] 10.2 Executar `deploy/bootstrap/bootstrap.sh` novamente sobre o
+      Executado de verdade pelo usuario. Todos os 9 SealedSecrets ja
+      versionados decifraram no cluster novo; todos os pods (ArgoCD,
+      cert-manager, plugin, operador, Postgres, Valkey, MinIO) subiram
+      Running sem nenhum passo manual alem dos dois scripts. Encontrou e
+      corrigiu, no processo, o impasse circular de onda registrado em D3
+      (Postgres precisava estar depois do bucket, nao junto com o MinIO).
+- [x] 10.2 Executar `deploy/bootstrap/bootstrap.sh` novamente sobre o
       ambiente ja provisionado e confirmar que conclui sem erro e sem alterar
       dados — idempotencia de cada script individual, nao so do conjunto.
-- [ ] 10.3 Conferir a ordenacao observando as ondas: nenhum consumidor iniciou
-      antes de seu pre-requisito estar utilizavel.
+      Executado de verdade pelo usuario sobre o ambiente ja provisionado:
+      sem erro em nenhuma etapa (`"ja instalado, nada a fazer"`, `"unchanged"`,
+      `"patched (no change)"` no health check customizado). Nenhum pod
+      reiniciou por causa da reexecucao; `ContinuousArchiving` continuou
+      `True`.
+- [x] 10.3 Conferir a ordenacao observando as ondas: nenhum consumidor iniciou
+      antes de seu pre-requisito estar utilizavel. Confirmado na
+      recriacao: cert-manager -> operador/plugin/sealed-secrets ->
+      segredos -> Valkey/MinIO -> job de buckets -> Postgres, nesta ordem,
+      sem nenhum consumidor adiantado.
 - [x] 10.4 Revisar `deploy/overlays/dev` e confirmar que toda propriedade que nao
       vale em producao esta escrita: sem redundancia, sem TLS, credenciais e
       chave de selagem versionadas, backup no mesmo disco do banco.
@@ -225,10 +252,12 @@ verificacao esta escrito junto quando nao e obvio.
       nome de maquina, endereco de instalacao particular ou classe de
       armazenamento que nao seja a padrao do cluster. Qualquer ocorrencia e
       defeito.
-- [ ] 10.7 Confirmar que a sobreposicao de desenvolvimento sobe em um cluster
+- [x] 10.7 Confirmar que a sobreposicao de desenvolvimento sobe em um cluster
       obtido de forma diferente da usada no dia a dia. Se houver apenas um tipo
       de host disponivel, no minimo recriar o cluster do zero e conferir que
       nenhum ajuste local foi necessario.
+      Apenas um tipo de host disponivel nesta verificacao: cluster recriado do
+      zero (10.1) sem nenhum ajuste local -- tudo veio do que esta versionado.
 
 ## 11. Encerramento
 
