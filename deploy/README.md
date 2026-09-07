@@ -78,7 +78,7 @@ Leia primeiro os requisitos comuns acima; depois, so a secao do seu sistema.
 
 ### Windows com WSL2
 
-k3s nao roda nativamente no Windows — precisa do WSL2. Seis
+k3s nao roda nativamente no Windows — precisa do WSL2. Sete
 pre-requisitos, cada um com um sintoma que **nao aponta para a causa** se
 ficar ausente:
 
@@ -90,6 +90,7 @@ ficar ausente:
 | Compactacao periodica do VHDX conhecida (`diskpart` / `wsl --manage <distro> --shrink`, conforme a versao do WSL) | O VHDX cresce e **nao encolhe sozinho**; volumes de plataforma e telemetria escrevem sem parar | Disco do host se esgota, mesmo com espaco "liberado" dentro da distro |
 | `loginctl enable-linger` para o seu usuario | `systemd=true` liga o systemd de SISTEMA (o que o k3s usa); o gerenciador de usuario (o que `systemctl --user` usa, exigido pelo soquete rootless do Podman) so nasce sozinho com o lingering habilitado | `Failed to connect to user scope bus via local transport: $DBUS_SESSION_BUS_ADDRESS and $XDG_RUNTIME_DIR not defined` -- nao menciona linger nem systemd de usuario em lugar nenhum |
 | Binarios em Go precisam do resolvedor DNS via `cgo` (`GODEBUG=netdns=cgo`), nao do resolvedor puro do Go | O `/etc/resolv.conf` gerado pelo WSL2 aponta para o gateway virtual da distro; o resolvedor puro do Go nao consegue usa-lo (mesmo endereco sendo alcancavel por `curl`/glibc) | `lookup <host> on <ip>:53: no such host`, tanto em ferramentas rodadas no host (`kustomize build` contra recurso remoto) quanto em pods (`argocd-repo-server` ao clonar o repositorio) -- a mensagem no aponta para WSL2 nem para Go |
+| `kubectl port-forward` para acessar paineis (ArgoCD, MinIO) do navegador do Windows -- `Ingress`/`NodePort` NAO chegam sozinhos | O encaminhamento automatico de `localhost` do WSL2 so detecta porta com socket de verdade em escuta; exposicao via `iptables`/NAT (o klipper-lb do Traefik, `kube-proxy` de qualquer `NodePort`) nao cria esse socket | `curl` de dentro do WSL2 funciona perfeitamente; o mesmo endereco simplesmente nao conecta do navegador do Windows, sem erro que aponte para a causa |
 
 `install-podman.sh` detecta a ausencia de lingering e o habilita sozinho,
 mas a sessao de shell **atual** ja nasceu sem os `$XDG_RUNTIME_DIR`/
@@ -346,7 +347,7 @@ spec:
 recusado**, nunca aplicado silenciosamente: o job de recuperacao falha com
 `"no target backup found"` e o Cluster nunca fica `Ready`.
 
-## Acessando os paineis (ArgoCD, MinIO) sem port-forward
+## Acessando os paineis (ArgoCD, MinIO)
 
 O k3s ja traz um Ingress controller (Traefik, escutando nas portas 80/443
 do proprio host). `deploy/overlays/dev/ingress-argocd.yaml` e
@@ -355,16 +356,34 @@ API padrao `networking.k8s.io/v1`, sem CRD nem anotacao especifica de
 controller, sem `ingressClassName` fixado (usa o default do cluster). Troque
 o Traefik por outro Ingress e o mesmo manifesto continua funcionando.
 
-**Hosts via nip.io, sem editar o `hosts` do Windows.** `nip.io` e um DNS
-publico coringa: `<qualquer-nome>.127.0.0.1.nip.io` resolve para
-`127.0.0.1` sem cadastro nenhum. Usa-se `127.0.0.1` (nunca muda) em vez do
-IP interno do WSL2 (que muda entre reinicios) -- o WSL2 ja encaminha
-`localhost` nos dois sentidos com o Windows, entao o navegador so precisa
-resolver o nome (uma consulta DNS normal, feita pelo Windows).
+**GOTCHA DE WSL2 (encontrado ao vivo): o Ingress funciona de dentro do
+WSL2, mas NAO chega ao navegador do Windows sem um passo a mais.** O
+encaminhamento automatico de `localhost` do WSL2 para o Windows so
+detecta portas com um socket de verdade em escuta (`ss -tln` mostra a
+porta). O klipper-lb do k3s (o que expoe a porta 80/443 do Traefik) e o
+`kube-proxy` (usado por qualquer `NodePort`, testado e confirmado a
+mesma limitacao) expoem porta por regra de `iptables`/NAT, sem socket
+literal -- `curl` de dentro do WSL2 funciona (o NAT se aplica a qualquer
+trafego dentro do mesmo namespace de rede), mas o encaminhamento
+automatico para o Windows nunca detecta a porta para encaminhar.
+
+**Para o navegador do Windows, o metodo confiavel continua sendo
+`kubectl port-forward`** (ele abre um socket de verdade, que o WSL2
+encaminha sem problema):
+
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8080:80
+kubectl port-forward svc/minio -n storage 9001:9001
+```
+
+Os `Ingress` com `nip.io` (abaixo) continuam validos e portaveis -- funcionam
+sem ajuste em qualquer host Linux nativo, e de dentro do proprio WSL2 (uma
+`curl` ou um navegador rodando dentro da distro). So nao substituem o
+`port-forward` para navegador do Windows enquanto o host for WSL2.
 
 ```
-   ArgoCD:  http://argocd.127.0.0.1.nip.io/
-   MinIO:   http://minio.127.0.0.1.nip.io/
+   ArgoCD:  http://argocd.127.0.0.1.nip.io/   (dentro do WSL2 ou Linux nativo)
+   MinIO:   http://minio.127.0.0.1.nip.io/    (dentro do WSL2 ou Linux nativo)
 ```
 
 **Por que o TLS do ArgoCD fica desligado
