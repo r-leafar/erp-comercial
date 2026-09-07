@@ -7,6 +7,7 @@ kind: Kustomization
 resources:
   - ../../base/plataforma/namespaces
   - ../../base/plataforma/sealed-secrets
+  - ../../base/plataforma/secrets
   - ../../base/plataforma/cnpg-operator
   - ../../base/plataforma/postgres
   - ../../base/plataforma/valkey
