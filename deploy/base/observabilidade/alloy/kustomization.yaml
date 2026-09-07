@@ -1,0 +1,13 @@
+# Onda 1: depois de Tempo, Mimir e Loki existirem (onda 0) -- mesma licao
+# do impasse circular de Postgres/MinIO em plataforma-gitops (D3 daquele
+# design): o agente exporta para os tres, entao sobe DEPOIS deles.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: observability
+resources:
+  - rbac.yaml
+  - config.yaml
+  - deployment.yaml
+  - service.yaml
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "1"

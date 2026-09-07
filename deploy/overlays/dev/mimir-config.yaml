@@ -1,0 +1,66 @@
+# Configuracao real do Mimir -- ambiente-especifica (contrato S3 de dev,
+# ver deploy/README.md) e a janela de retencao de DEV (tarefa 4.4), curta de
+# proposito pelo mesmo motivo do Tempo (ver tempo-config.yaml). Multi-tenancy
+# desligado: um unico ambiente de dev nao precisa de isolamento por tenant, e
+# simplifica o remote_write do Alloy (sem cabecalho X-Scope-OrgID).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mimir-config
+  namespace: observability
+data:
+  mimir.yaml: |
+    multitenancy_enabled: false
+
+    server:
+      http_listen_port: 8080
+      grpc_listen_port: 9095
+
+    common:
+      storage:
+        backend: s3
+        s3:
+          endpoint: minio.storage.svc.cluster.local:9000
+          region: us-east-1
+          access_key_id: ${MIMIR_ACCESS_KEY}
+          secret_access_key: ${MIMIR_SECRET_KEY}
+          insecure: true
+
+    blocks_storage:
+      s3:
+        bucket_name: mimir-blocks
+      bucket_store:
+        sync_dir: /data/tsdb-sync
+      tsdb:
+        dir: /data/tsdb
+
+    # Fator de replicacao padrao (3) presume varias instancias; com uma so
+    # (D4 do design), a consulta falha com "too many unhealthy instances in
+    # the ring" ate ser reduzido para 1. Confirmado ao vivo. Fronteira
+    # dev/prod: producao roda mais de uma instancia e usa o padrao.
+    ingester:
+      ring:
+        replication_factor: 1
+    store_gateway:
+      sharding_ring:
+        replication_factor: 1
+
+    alertmanager_storage:
+      s3:
+        bucket_name: mimir-alertmanager
+
+    ruler_storage:
+      s3:
+        bucket_name: mimir-ruler
+
+    alertmanager:
+      data_dir: /data/alertmanager
+
+    compactor:
+      data_dir: /data/compactor
+
+    ruler:
+      rule_path: /data/ruler
+
+    limits:
+      compactor_blocks_retention_period: 2h

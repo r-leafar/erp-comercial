@@ -1,0 +1,12 @@
+# Onda 1 (mesma onda do Alloy): depende de Tempo/Mimir/Loki existirem
+# (onda 0) para provisionar as fontes de dados contra um endereco que ja
+# responde.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: observability
+resources:
+  - datasources.yaml
+  - deployment.yaml
+  - service.yaml
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "1"

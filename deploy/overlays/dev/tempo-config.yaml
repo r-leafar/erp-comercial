@@ -1,0 +1,47 @@
+# Configuracao real do Tempo -- ambiente-especifica (contrato S3 de dev:
+# endereco do MinIO interno, sem TLS, enderecamento por caminho, regiao de
+# convencao -- ver deploy/README.md, "Contrato de configuracao de acesso a
+# objetos") e a janela de retencao de DEV (tarefa 3.4). Curta de proposito
+# para que a remocao efetiva (secao 6 das tarefas) seja verificavel em
+# minutos, nao em dias -- propriedade de dev que NAO vale em producao.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-config
+  namespace: observability
+data:
+  tempo.yaml: |
+    server:
+      http_listen_port: 3200
+
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+
+    ingester:
+      trace_idle_period: 10s
+      complete_block_timeout: 1m
+
+    compactor:
+      compaction:
+        block_retention: 2h
+        compacted_block_retention: 5m
+
+    storage:
+      trace:
+        backend: s3
+        s3:
+          bucket: tempo-traces
+          endpoint: minio.storage.svc.cluster.local:9000
+          access_key: ${TEMPO_ACCESS_KEY}
+          secret_key: ${TEMPO_SECRET_KEY}
+          region: us-east-1
+          forcepathstyle: true
+          insecure: true
+        wal:
+          path: /var/tempo/wal

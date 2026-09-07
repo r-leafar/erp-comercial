@@ -1,0 +1,21 @@
+# Endereco interno consumido pelo Alloy (exportador OTLP) e pelo Grafana
+# (fonte de dados de rastros).
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  labels:
+    app.kubernetes.io/name: tempo
+spec:
+  selector:
+    app.kubernetes.io/name: tempo
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+    - name: http
+      port: 3200
+      targetPort: http

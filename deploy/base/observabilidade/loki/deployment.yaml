@@ -1,0 +1,61 @@
+# Loki em modo monolitico (target "all", o padrao do binario sem flag
+# -target explicita): mesmo comportamento observavel do modo distribuido,
+# sem os componentes internos separados (D4 do design). O arquivo de
+# configuracao real (loki-config, com o backend S3 e a janela de retencao)
+# vem da sobreposicao do ambiente (tarefas 5.1, 5.4).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loki
+  labels:
+    app.kubernetes.io/name: loki
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # evita duas instancias disputando o mesmo indice TSDB local
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: loki
+    spec:
+      containers:
+        - name: loki
+          image: grafana/loki:3.7.7
+          args:
+            - -config.file=/etc/loki/loki.yaml
+            - -config.expand-env=true # credenciais vem de env, nunca do arquivo (D4, D6 de plataforma-gitops)
+          envFrom:
+            - secretRef:
+                name: minio-creds-loki
+          ports:
+            - name: http
+              containerPort: 3100
+            - name: grpc
+              containerPort: 9096
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 20
+          volumeMounts:
+            - name: config
+              mountPath: /etc/loki
+            - name: data
+              mountPath: /data/loki
+      volumes:
+        - name: config
+          configMap:
+            name: loki-config
+        - name: data
+          # Indice TSDB e diretorio de trabalho do compactor -- mesma
+          # propriedade de dev ja registrada para o Tempo/Mimir: perder isto
+          # num reinicio perde so o que ainda nao foi enviado ao S3.
+          emptyDir: {}

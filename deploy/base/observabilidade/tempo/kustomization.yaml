@@ -1,0 +1,12 @@
+# Onda 0 (mesma onda do Postgres em plataforma-gitops, D3 daquele design):
+# depende do bucket ja existir (onda -1, minio-provision) e do segredo ja
+# existir (onda -3, observabilidade/secrets). O ConfigMap com o arquivo de
+# configuracao real (tempo-config) vem da sobreposicao do ambiente.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: observability
+resources:
+  - deployment.yaml
+  - service.yaml
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "0"

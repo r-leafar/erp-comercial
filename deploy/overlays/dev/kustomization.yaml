@@ -15,5 +15,15 @@ resources:
   - ../../base/plataforma/valkey
   - ../../base/plataforma/minio
   - ../../base/plataforma/minio-provision
+  - ../../base/observabilidade/secrets
+  - ../../base/observabilidade/tempo
+  - ../../base/observabilidade/mimir
+  - ../../base/observabilidade/loki
+  - ../../base/observabilidade/alloy
+  - ../../base/observabilidade/grafana
+  - tempo-config.yaml
+  - mimir-config.yaml
+  - loki-config.yaml
   - ingress-argocd.yaml
   - ingress-minio.yaml
+  - ingress-grafana.yaml

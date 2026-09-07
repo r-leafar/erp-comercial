@@ -1,0 +1,69 @@
+# Fontes de dados provisionadas de forma declarativa (tarefa 7.1, D7 do
+# design): sobrevivem a recriacao do ambiente sem intervencao manual
+# (tarefa 9.3/7.6 verificam isso). UIDs fixos para que a correlacao entre
+# fontes (abaixo) referencie um alvo estavel.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        access: proxy
+        url: http://tempo.observability.svc.cluster.local:3200
+        jsonData:
+          # Rastro continuo (tarefa 7.2): a partir de um rastro, navegar
+          # para os logs com o mesmo trace_id (D7, D9 -- otelcol.exporter.loki
+          # promove trace_id/span_id como metadado estruturado do Loki).
+          tracesToLogsV2:
+            datasourceUid: loki
+            filterByTraceID: true
+            filterBySpanID: false
+            tags: ["namespace", "pod"]
+          # Correlacao temporal com metricas (tarefa 7.4): metrica sempre
+          # presente (contagem de series do proprio agente) no mesmo
+          # periodo do rastro, prova a capacidade sem depender de uma
+          # metrica de negocio que ainda nao existe.
+          tracesToMetrics:
+            datasourceUid: mimir
+            queries:
+              - name: "Series do Alloy no periodo"
+                query: "alloy_component_evaluation_seconds_count"
+          serviceMap:
+            datasourceUid: mimir
+
+      - name: Mimir
+        uid: mimir
+        type: prometheus
+        access: proxy
+        url: http://mimir.observability.svc.cluster.local:8080/prometheus
+        jsonData:
+          httpMethod: GET
+
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: http://loki.observability.svc.cluster.local:3100
+        jsonData:
+          # Rastro continuo, sentido inverso (tarefa 7.3): de um log para o
+          # rastro que o originou. trace_id tambem sai como texto no corpo
+          # do log (alem de metadado estruturado), entao o casamento por
+          # expressao regular funciona independente da forma como o
+          # metadado e exposto nesta versao.
+          derivedFields:
+            - datasourceUid: tempo
+              matcherRegex: "trace_id=(\\w+)"
+              name: TraceID
+              # CONFIRMADO AO VIVO: o provisionamento do Grafana faz sua
+              # PROPRIA expansao de $VAR/${VAR} (variaveis de ambiente do
+              # OS) sobre o YAML antes de interpretar o campo -- escrito
+              # como "${__value.raw}" direto, vira "" (nao existe variavel
+              # de ambiente __value.raw). Precisa do cifrao duplicado para
+              # sobreviver as DUAS camadas de expansao (a do provisionamento
+              # e, depois, a do proprio campo url do derivedField).
+              url: "$${__value.raw}"
