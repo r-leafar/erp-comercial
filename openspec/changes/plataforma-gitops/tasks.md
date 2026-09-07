@@ -30,12 +30,12 @@ verificacao esta escrito junto quando nao e obvio.
 
 - [x] 2.1 Fixar a versao do k3s e registra-la, para que todos os ambientes usem a
       mesma.
-- [ ] 2.2 Confirmar que a classe de armazenamento local padrao do cluster esta
+- [x] 2.2 Confirmar que a classe de armazenamento local padrao do cluster esta
       disponivel e e a unica referenciada pelos manifestos.
 - [ ] 2.3 Estabelecer e registrar o consumo minimo de memoria e CPU exigido pela
       plataforma completa. Verificacao: com tudo no ar, a maquina permanece
       utilizavel para o trabalho normal.
-- [ ] 2.4 Confirmar que a aplicacao, rodando no proprio host, alcanca banco,
+- [x] 2.4 Confirmar que a aplicacao, rodando no proprio host, alcanca banco,
       cache e armazenamento por endereco local.
 - [ ] 2.5 Confirmar que o cluster sobe sozinho apos reinicio do host, sem comando
       manual.
@@ -93,7 +93,7 @@ verificacao esta escrito junto quando nao e obvio.
 - [x] 5.2 Escrever o script `deploy/bootstrap/apply-root-app.sh`, que declara
       e aplica a aplicacao raiz apontando para `deploy/overlays/dev`, chamado
       pelo orquestrador ao final da sequencia.
-- [ ] 5.3 Verificar reversao de divergencia: alterar um recurso diretamente no
+- [x] 5.3 Verificar reversao de divergencia: alterar um recurso diretamente no
       cluster e confirmar que o estado declarado e restaurado sozinho.
 - [ ] 5.4 Verificar deteccao de estado invalido: introduzir uma declaracao
       irrealizavel e confirmar que a falha identifica o recurso responsavel.
@@ -111,7 +111,7 @@ verificacao esta escrito junto quando nao e obvio.
 - [x] 6.3 Escrever o script `deploy/bootstrap/restore-sealing-key.sh`, que
       restaura a chave, chamado pelo orquestrador antes de qualquer
       `SealedSecret` ser aplicado.
-- [ ] 6.4 Criar os segredos cifrados de banco, cache e armazenamento.
+- [x] 6.4 Criar os segredos cifrados de banco, cache e armazenamento.
 - [ ] 6.5 **Verificar a recriacao completa**: executar `destroy-cluster.sh`,
       depois `bootstrap.sh`, e confirmar que os segredos ja versionados
       continuam sendo decifrados. Sem esta verificacao a capacidade nao esta
@@ -127,9 +127,9 @@ verificacao esta escrito junto quando nao e obvio.
       `mimir-blocks`, `mimir-ruler`, `mimir-alertmanager`, `loki-chunks`,
       `loki-ruler`, `tempo-traces`, `postgres-backup`, `arquivos`.
 - [x] 7.3 Criar uma credencial por consumidor, restrita aos seus repositorios.
-- [ ] 7.4 Verificar idempotencia: executar o job duas vezes e confirmar que a
+- [x] 7.4 Verificar idempotencia: executar o job duas vezes e confirmar que a
       segunda conclui sem erro e sem alterar objetos existentes.
-- [ ] 7.5 Verificar isolamento: tentar acessar, com a credencial de um
+- [x] 7.5 Verificar isolamento: tentar acessar, com a credencial de um
       consumidor, o repositorio de outro, e confirmar que e negado.
 - [x] 7.6 Registrar em `deploy/README.md` o contrato de configuracao de acesso e
       os dois pontos de atrito conhecidos: enderecamento por caminho e o valor de
@@ -139,7 +139,7 @@ verificacao esta escrito junto quando nao e obvio.
 
 - [x] 8.1 Declarar o operador de banco na onda inicial e fixar sua versao.
 - [x] 8.2 Declarar o cluster de banco, com credencial vinda de segredo.
-- [x] 8.3 Configurar archive continuo do registro de transacoes para
+- [ ] 8.3 Configurar archive continuo do registro de transacoes para
       `postgres-backup`, seguindo a documentacao da versao fixada.
 - [x] 8.4 Configurar copia base periodica e registrar a frequencia escolhida.
 - [ ] 8.5 Verificar que o archive esta ativo: confirmar transacoes e observar os
