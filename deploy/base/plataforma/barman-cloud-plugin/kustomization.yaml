@@ -1,0 +1,15 @@
+# Barman Cloud Plugin (D8 do design): mecanismo de backup/arquivamento de
+# WAL do CloudNativePG, em substituicao ao `spec.backup.barmanObjectStore`
+# classico -- deprecado desde a v1.26 do CNPG, com bug ativo conhecido
+# (cloudnative-pg/cloudnative-pg#6031, "failed to get envs: cache miss") e
+# remocao prevista para a v1.31. Mantido pelo mesmo projeto CloudNativePG;
+# nao substitui o operador, so a responsabilidade de backup dele.
+# Onda -4: precisa existir antes do Cluster (onda -2) referencia-lo via
+# spec.plugins. Depende do cert-manager (onda -5) para os Certificate/
+# Issuer que o proprio manifesto declara.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v0.15.0/manifest.yaml
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "-4"

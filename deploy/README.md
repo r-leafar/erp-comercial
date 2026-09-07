@@ -34,6 +34,8 @@ hospeda.
 | ArgoCD | `v3.5.2` | `deploy/bootstrap/install-argocd.sh` |
 | Sealed Secrets (controller) | `v0.39.1` | `deploy/base/plataforma/sealed-secrets/` |
 | CloudNativePG (operator) | `v1.30.0` | `deploy/base/plataforma/cnpg-operator/` |
+| cert-manager | `v1.21.1` | `deploy/base/plataforma/cert-manager/` |
+| Barman Cloud Plugin | `v0.15.0` | `deploy/base/plataforma/barman-cloud-plugin/` |
 | MinIO | `RELEASE.2025-09-07T16-13-09Z` | `deploy/base/plataforma/minio/deployment.yaml` |
 | MinIO Client (`mc`, job de buckets) | `RELEASE.2025-08-13T08-35-41Z` | `deploy/base/plataforma/minio-provision/buckets-job.yaml` |
 | Valkey | `8.1-alpine` | `deploy/base/plataforma/valkey/deployment.yaml` |
@@ -148,7 +150,8 @@ O ArgoCD aplica cada onda somente apos a anterior estar saudavel:
 
 | Onda | Conteudo |
 |---|---|
-| -4 | Namespaces, definicoes de recurso customizado, controller do Sealed Secrets, operator do CloudNativePG |
+| -5 | cert-manager (pre-requisito do Barman Cloud Plugin) |
+| -4 | Namespaces, definicoes de recurso customizado, controller do Sealed Secrets, operator do CloudNativePG, Barman Cloud Plugin |
 | -3 | Objetos `SealedSecret` |
 | -2 | Postgres (CloudNativePG), Valkey, MinIO |
 | -1 | Job idempotente de provisionamento de buckets e credenciais no MinIO |

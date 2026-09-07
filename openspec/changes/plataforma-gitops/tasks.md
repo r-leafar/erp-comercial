@@ -137,19 +137,26 @@ verificacao esta escrito junto quando nao e obvio.
 
 ## 8. Banco de dados
 
-- [x] 8.1 Declarar o operador de banco na onda inicial e fixar sua versao.
-- [x] 8.2 Declarar o cluster de banco, com credencial vinda de segredo.
-- [ ] 8.3 Configurar archive continuo do registro de transacoes para
-      `postgres-backup`, seguindo a documentacao da versao fixada.
-- [x] 8.4 Configurar copia base periodica e registrar a frequencia escolhida.
-- [ ] 8.5 Verificar que o archive esta ativo: confirmar transacoes e observar os
+- [x] 8.1 Declarar o cert-manager na onda -5, pre-requisito do Barman Cloud
+      Plugin (D8). Fixar sua versao.
+- [x] 8.2 Declarar o Barman Cloud Plugin na onda -4 e fixar sua versao.
+      Verificacao: `Certificate`/`Issuer` do proprio plugin ficam prontos
+      (cert-manager, onda -5, ja precisa estar saudavel).
+- [x] 8.3 Declarar o operador de banco na onda -4 e fixar sua versao.
+- [x] 8.4 Declarar o cluster de banco, com credencial vinda de segredo, e o
+      `ObjectStore` que ele referencia via `spec.plugins` (D8) — nao mais
+      `spec.backup.barmanObjectStore`, deprecado e nao-funcional na versao
+      fixada do operador (confirmado ao vivo).
+- [x] 8.5 Configurar copia base periodica via `ScheduledBackup` com
+      `method: plugin`, e registrar a frequencia escolhida.
+- [ ] 8.6 Verificar que o archive esta ativo: confirmar transacoes e observar os
       segmentos chegando ao armazenamento de objetos.
-- [ ] 8.6 Verificar que falha de archive e observavel: interromper o acesso ao
+- [ ] 8.7 Verificar que falha de archive e observavel: interromper o acesso ao
       armazenamento e confirmar que a condicao e reportada, nao silenciosa.
-- [ ] 8.7 **Exercitar a restauracao a ponto no tempo**: gravar um dado, remove-lo
+- [ ] 8.8 **Exercitar a restauracao a ponto no tempo**: gravar um dado, remove-lo
       depois, restaurar para o instante anterior e conferir o resultado. Enquanto
       isto nao for feito, a capacidade esta incompleta.
-- [ ] 8.8 Verificar que instante fora da janela e recusado com mensagem que
+- [ ] 8.9 Verificar que instante fora da janela e recusado com mensagem que
       informa a janela disponivel.
 
 ## 9. Cache e canal de notificacao

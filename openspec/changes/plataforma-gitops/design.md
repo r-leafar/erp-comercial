@@ -145,8 +145,9 @@ registrar o marcador de imagem. Nenhum dos dois existe hoje.
 para a proxima onda quando a anterior esta saudavel.
 
 ```
+   -5   cert-manager (pre-requisito do plugin de backup, D8)
    -4   espacos de nomes, definicoes de recurso customizado,
-        controlador de segredos, operador do banco
+        controlador de segredos, operador do banco, plugin de backup (D8)
    -3   objetos de segredo cifrados
    -2   Postgres, Valkey, MinIO
    -1   provisionamento de repositorios de objetos e credenciais
@@ -257,12 +258,45 @@ decisao explicita do que como descoberta tardia.
 ### D8. Banco com archive continuo e restauracao verificada
 
 **Decisao.** O banco e gerido por operador (CloudNativePG), com archive continuo
-do registro de transacoes e copia base para o armazenamento de objetos. **A
-capacidade so e considerada entregue apos uma restauracao realmente executada e
-conferida.**
+do registro de transacoes e copia base para o armazenamento de objetos, atraves
+do **Barman Cloud Plugin**. **A capacidade so e considerada entregue apos uma
+restauracao realmente executada e conferida.**
 
 **Consequencia que evita.** Backup configurado e nunca testado, que so se revela
 inutil no dia em que e necessario. Configurar e barato; restaurar e o que prova.
+
+**Mecanismo de backup: plugin, nao a API classica.** A primeira tentativa usou
+`spec.backup.barmanObjectStore` (a forma inline, historicamente mais documentada).
+Rodando contra um cluster de verdade, o archive continuo nunca ficou saudavel:
+`ContinuousArchiving: False`, `"failed to get envs: cache miss"`. Investigado e
+confirmado: esse campo esta **deprecado desde a v1.26** do CloudNativePG, tem
+**bug ativo conhecido** nessa configuracao especifica
+([cloudnative-pg/cloudnative-pg#6031](https://github.com/cloudnative-pg/cloudnative-pg/issues/6031))
+e sera **removido na v1.31** — a versao seguinte a fixada aqui. O caminho
+substituto, oficial e mantido pelo mesmo projeto, e o Barman Cloud Plugin: um
+controller separado que fala com o object storage atraves de uma interface
+propria do CNPG (CNPG-I, no mesmo espirito do CSI do Kubernetes para
+armazenamento), configurado por um recurso `ObjectStore` referenciado pelo
+`Cluster` via `spec.plugins`, em vez do backup inline.
+
+```
+   ANTES (deprecado, com bug)              DEPOIS (Barman Cloud Plugin)
+   -----------------------------------     ------------------------------------
+   Cluster.spec.backup.barmanObjectStore   Cluster.spec.plugins:
+     destinationPath, endpointURL,           - name: barman-cloud...
+     s3Credentials, wal, retentionPolicy         isWALArchiver: true
+                                                  parameters.barmanObjectName
+                                           ObjectStore (recurso separado):
+                                             mesma configuracao de destino/
+                                             credencial, so que num CR proprio
+```
+
+**Dependencia nova, nao prevista antes de testar ao vivo.** O plugin usa
+`Certificate`/`Issuer` (`cert-manager.io`) para TLS entre ele e o operador —
+exige **cert-manager** instalado, numa onda anterior a de qualquer um dos dois
+(onda -5; o plugin e o operador do CNPG ficam na -4). Sem essa onda extra, o
+mesmo impasse de "recurso que depende de algo de uma onda futura" (ja visto e
+corrigido em D3/D14) se repetiria, agora com o Certificate do proprio plugin.
 
 **Fronteira dev/prod declarada.** Em desenvolvimento, o armazenamento de backup
 fica no mesmo disco do banco. **Isso nao e backup**: perda do disco leva os dois
@@ -270,9 +304,6 @@ juntos. Existe para exercitar o mecanismo de recuperacao a ponto no tempo, nao
 para prover durabilidade. Registrado aqui porque a diferenca entre "temos
 backup" e "temos o mecanismo de backup" e exatamente onde as pessoas se
 enganam.
-
-**Ponto a verificar.** A forma de configurar o archive mudou entre versoes do
-operador. Fixar a versao e seguir a documentacao dela, em vez de assumir.
 
 ### D9. Valkey como cache e canal de notificacao, com semantica declarada
 
