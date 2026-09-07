@@ -1,0 +1,21 @@
+# Configuracao de backup via Barman Cloud Plugin (D8 do design). Onda -2,
+# junto com o Cluster que a referencia por nome em spec.plugins.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: erp-postgres-backup
+  namespace: data
+spec:
+  configuration:
+    destinationPath: s3://postgres-backup/
+    endpointURL: http://minio.storage.svc.cluster.local:9000
+    s3Credentials:
+      accessKeyId:
+        name: minio-creds-postgres
+        key: POSTGRES_BACKUP_ACCESS_KEY
+      secretAccessKey:
+        name: minio-creds-postgres
+        key: POSTGRES_BACKUP_SECRET_KEY
+    wal:
+      compression: gzip
+  retentionPolicy: "30d"

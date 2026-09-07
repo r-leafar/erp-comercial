@@ -1,10 +1,12 @@
 # Cluster de banco (D8 do design), onda -2. O operador que o reconcilia
-# vive em deploy/base/plataforma/cnpg-operator (onda -4, separado por
-# precisar de uma onda diferente).
+# vive em deploy/base/plataforma/cnpg-operator (onda -4); o plugin de
+# backup, em deploy/base/plataforma/barman-cloud-plugin (onda -4 tambem,
+# separados por precisarem de ondas diferentes da do Cluster).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - cluster.yaml
   - scheduled-backup.yaml
+  - objectstore.yaml
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "-2"

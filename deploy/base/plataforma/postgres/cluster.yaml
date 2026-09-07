@@ -3,14 +3,13 @@
 # nao e garantida entre recursos distintos; se isso se provar um problema
 # na pratica, mover o bucket postgres-backup para uma onda propria).
 #
-# PONTO A VERIFICAR (D8): a forma de configurar archive continuo e backup
-# mudou entre versoes do CloudNativePG -- confirmar contra a documentacao
-# da v1.30.0 fixada se `spec.backup.barmanObjectStore` (usado abaixo,
-# forma classica e mais amplamente documentada) ainda e o caminho corrente,
-# ou se a versao fixada exige o plugin Barman Cloud (`ObjectStore` CRD
-# separado) em seu lugar. Esta e a falha mais provavel desta capacidade e
-# so a tarefa 8.7 (restauracao exercitada de verdade) prova qual forma
-# funciona.
+# Backup via Barman Cloud Plugin (deploy/base/plataforma/barman-cloud-plugin,
+# onda -4), NAO mais `spec.backup.barmanObjectStore`: essa forma classica se
+# mostrou nao-funcional na v1.30.0 fixada, confirmado ao vivo ("failed to
+# get envs: cache miss") -- API deprecada desde a v1.26, com bug ativo
+# conhecido (cloudnative-pg/cloudnative-pg#6031) e remocao prevista para a
+# v1.31. A configuracao de destino/credencial mora agora em
+# deploy/base/plataforma/postgres/objectstore.yaml, referenciada por nome.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -26,17 +25,8 @@ spec:
       owner: erp
       secret:
         name: postgres-credentials
-  backup:
-    barmanObjectStore:
-      destinationPath: s3://postgres-backup/
-      endpointURL: http://minio.storage.svc.cluster.local:9000
-      s3Credentials:
-        accessKeyId:
-          name: minio-creds-postgres
-          key: POSTGRES_BACKUP_ACCESS_KEY
-        secretAccessKey:
-          name: minio-creds-postgres
-          key: POSTGRES_BACKUP_SECRET_KEY
-      wal:
-        compression: gzip
-    retentionPolicy: "30d"
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: erp-postgres-backup

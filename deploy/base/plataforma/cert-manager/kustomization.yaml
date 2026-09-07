@@ -1,0 +1,12 @@
+# cert-manager, pre-requisito do Barman Cloud Plugin (D8 do design): o
+# plugin usa Certificate/Issuer (cert-manager.io) para TLS entre ele e o
+# CloudNativePG. Onda -5: precisa estar saudavel ANTES da onda -4, onde o
+# proprio plugin declara seus Certificate/Issuer -- mesma classe de
+# impasse ja corrigida em D14/D3 (recurso que referencia algo de uma onda
+# posterior nunca fica saudavel).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/cert-manager/cert-manager/releases/download/v1.21.1/cert-manager.yaml
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "-5"
