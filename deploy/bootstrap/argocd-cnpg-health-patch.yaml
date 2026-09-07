@@ -1,0 +1,60 @@
+# Health check customizado do ArgoCD para o Cluster do CloudNativePG
+# (D3, D8 do design; tarefa 5.5).
+#
+# POR QUE ISTO EXISTE: sem ele, o ArgoCD so avalia a condicao `Ready` do
+# Cluster (fallback generico). Um Cluster pode estar Ready -- aceitando
+# conexao, servindo consulta -- e ainda assim com o archive continuo
+# quebrado (ContinuousArchiving: False), sem que isso apareca em NENHUM
+# lugar da tela de saude. Confirmado ao vivo: quebrar a credencial do
+# backup nao mudava a saude geral da Application de "Healthy" ate este
+# patch existir; depois dele, vira "Degraded" corretamente, e volta a
+# "Healthy" assim que o archive volta a funcionar.
+#
+# Aplicado por deploy/bootstrap/install-argocd.sh via `kubectl patch
+# configmap argocd-cm --type merge` (idempotente). Nao vive no GitOps
+# porque argocd-cm e o proprio ArgoCD, fora do namespace que o overlay
+# gerencia -- mesma fronteira imperativa de D1/D14.
+data:
+  resource.customizations.health.postgresql.cnpg.io_Cluster: |
+    -- Ver comentario acima: fallback do ArgoCD so olha Ready, ignorando
+    -- ContinuousArchiving. Este script confere as duas.
+    local health_status = {}
+
+    if obj.status == nil or obj.status.conditions == nil then
+      health_status.status = "Progressing"
+      health_status.message = "Aguardando o primeiro relato de status do Cluster"
+      return health_status
+    end
+
+    local ready = false
+    local readyMessage = nil
+    local archivingFailedMessage = nil
+
+    for i, condition in ipairs(obj.status.conditions) do
+      if condition.type == "Ready" then
+        if condition.status == "True" then
+          ready = true
+        else
+          readyMessage = condition.message
+        end
+      end
+      if condition.type == "ContinuousArchiving" and condition.status == "False" then
+        archivingFailedMessage = condition.message
+      end
+    end
+
+    if not ready then
+      health_status.status = "Progressing"
+      health_status.message = readyMessage or "Aguardando o Cluster ficar Ready"
+      return health_status
+    end
+
+    if archivingFailedMessage ~= nil then
+      health_status.status = "Degraded"
+      health_status.message = "Cluster pronto, mas archive continuo falhando: " .. archivingFailedMessage
+      return health_status
+    end
+
+    health_status.status = "Healthy"
+    health_status.message = "Cluster Ready, archive continuo funcionando"
+    return health_status
