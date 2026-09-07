@@ -40,15 +40,17 @@ Restricoes que moldam o desenho:
    +==================================================================+
 
    O conteudo do cluster e identico em qualquer host. Como o cluster
-   e obtido varia, e isso e assunto de documentacao, nao da plataforma.
+   e obtido varia por sistema operacional (D14 automatiza essa criacao
+   por script); o que ele contem, no overlay, e o unico contrato da
+   plataforma, e nao muda com a forma de obtencao.
 ```
 
 ## Goals / Non-Goals
 
 **Goals**
 
-- Levantar a plataforma inteira a partir de um cluster vazio com um unico
-  procedimento de bootstrap versionado.
+- Levantar a plataforma inteira a partir de uma maquina sem cluster algum, com
+  um unico procedimento de bootstrap versionado.
 - Estabelecer o contrato de configuracao de acesso a objetos, banco e cache que
   todas as changes seguintes vao consumir sem alteracao.
 - Tornar a diferenca entre desenvolvimento e producao uma estrutura visivel no
@@ -82,10 +84,11 @@ falhar, e nao ha como recriar o ambiente com confianca.
   que torna a ordenacao e o estado de sincronizacao observaveis enquanto a
   equipe aprende o modelo. E uma decisao de didatica, nao de capacidade.
 
-**Fronteira imperativa aceita.** A instalacao do proprio agente e a restauracao
-do material de decifragem sao imperativas por natureza. Ficam isoladas em um
-procedimento de bootstrap unico, executado uma vez por cluster, versionado em
-`deploy/bootstrap/`.
+**Fronteira imperativa aceita.** A criacao do proprio cluster, a instalacao do
+agente e a restauracao do material de decifragem sao imperativas por
+natureza. Ficam isoladas em um procedimento de bootstrap unico, executado uma
+vez por cluster, versionado em `deploy/bootstrap/` (a forma desse
+procedimento e detalhada em D14).
 
 ### D2. Estrutura de repositorio: base unica com sobreposicao por ambiente
 
@@ -481,6 +484,77 @@ retorno a versao anterior, e nao ha como responder qual commit esta em execucao.
 **Evolucao prevista.** Quando houver integracao continua e producao, a
 atualizacao passa a ser automatica, sem alterar nada do que e definido aqui.
 
+### D14. Bootstrap por scripts especializados, sem ferramenta de infraestrutura declarativa
+
+**Decisao.** A fatia imperativa aceita em D1 (criar o cluster e instalar o
+que o GitOps ainda nao pode gerenciar) e implementada por scripts simples,
+um por responsabilidade, chamados em ordem por um unico orquestrador. Nenhuma
+ferramenta externa de infraestrutura como codigo entra nesta change.
+
+```
+   deploy/bootstrap/
+     bootstrap.sh              orquestrador: so decide a ORDEM,
+       |                       nao contem logica de instalacao propria
+       +--> install-cluster.sh      cria o cluster k3s (por sistema
+       |                            operacional, versao fixada)
+       +--> install-argocd.sh       instala o agente de reconciliacao
+       +--> restore-sealing-key.sh  restaura a chave de selagem de dev
+       +--> apply-root-app.sh       aplica a Application raiz
+                                    apontando para deploy/overlays/dev
+
+     destroy-cluster.sh        NAO faz parte do orquestrador -- desfaz
+                                exatamente o que install-cluster.sh fez,
+                                por sistema operacional (delega ao
+                                desinstalador oficial do k3s quando ele
+                                existir). Destruir o cluster remove tudo
+                                que estava dentro dele; nao ha por-
+                                ferramenta para desinstalar, so o par
+                                criar/destruir do cluster em si.
+```
+
+**Consequencia que evita.** Um unico script monolitico onde a ordem entre
+responsabilidades fica implicita no meio de linhas de instalacao de
+ferramentas diferentes, dificil de verificar isoladamente e dificil de
+apontar qual trecho falhou. Cada script aqui e pequeno o bastante para ser
+testado sozinho, e o orquestrador concentra a UNICA decisao de ordem,
+tornando-a explicita e revisavel num so lugar.
+
+**Alternativas recusadas.**
+
+- *OpenTofu/Terraform.* Considerado com cuidado, por trazer plano/aplicacao
+  previsivel e estado rastreado. Recusado por quatro motivos, cada um
+  pesando mais do que o ganho, dado o tamanho desta change:
+  1. Introduz um novo modo de falha que o script nao tem: o arquivo de
+     estado pode ficar dessincronizado da realidade, exigindo `state
+     rm`/`import` manual para corrigir — o oposto de "recriar do zero sem
+     passo manual" que a change persegue.
+  2. Nao elimina o script de fato: no caminho de VM (o que serviria para
+     on-premise), o proprio Tofu ainda injeta um script de bootstrap via
+     cloud-init para instalar o k3s. So no caminho de container ele some
+     por completo.
+  3. Qualquer valor sensivel que passe por um recurso Tofu fica em texto
+     claro no arquivo de estado — reabrindo, num arquivo novo, exatamente o
+     problema que o D4 (Sealed Secrets) foi desenhado para fechar no
+     repositorio.
+  4. Os providers que serviriam exatamente para o que esta change precisa
+     agora (local e on-premise: docker, libvirt) sao de comunidade, com
+     cobertura mais estreita que os providers de nuvem gerenciada — que
+     sao justamente os que esta change adia.
+- *Cluster API (CAPI).* Modelo mais alinhado ao GitOps (cluster e
+  MachineDeployment sao CRDs reconciliadas continuamente, no mesmo espirito
+  do ArgoCD), e cobre gerenciado e on-premise com o mesmo par de objetos.
+  Recusado porque exige um cluster de gerencia — um cluster cuja unica
+  funcao e rodar os controllers que criam os demais — peso operacional que
+  so se paga quando ha uma frota de clusters para administrar. Hoje ha um
+  cluster de dev e um contrato para producao ainda nao provisionado; nao
+  ha frota.
+
+**Escopo aceito.** Esta decisao automatiza a criacao do cluster de
+desenvolvimento. Producao — gerenciada ou on-premise — continua non-goal
+desta change (ja declarado no proposal). Se um dia existir mais de um
+cluster real para manter, Cluster API volta a ser a opcao a reconsiderar,
+porque o par gerenciado/on-premise ja e coberto pelo mesmo modelo.
+
 ## Risks / Trade-offs
 
 | Risco | Impacto | Mitigacao |
@@ -493,6 +567,7 @@ atualizacao passa a ser automatica, sem alterar nada do que e definido aqui.
 | Pre-requisitos de host documentados para apenas um sistema operacional | Desenvolvedor em outro sistema encontra instrucao que nao se aplica | Documentacao organizada em requisitos comuns mais uma secao por sistema |
 | Divergencia entre desenvolvimento e producao mascarada pela sobreposicao | Comportamento so aparece em producao | Sobreposicao contem apenas diferencas; qualquer adicao a ela e decisao consciente |
 | Configuracao de archive divergente da versao do operador | Backup silenciosamente inativo | Fixar versao; validar por restauracao real, nao por configuracao presente |
+| Script individual do bootstrap com logica implicita de ordem ou sem checagem de idempotencia | Falha intermitente dificil de reproduzir; reexecucao altera estado que ja estava correto | Cada script cobre uma unica ferramenta; a ordem vive so no orquestrador; toda reexecucao e verificada nas tarefas de bootstrap |
 | Confundir o ambiente de desenvolvimento com ambiente duravel | Perda de dado por falsa confianca | Fronteira dev/prod escrita neste design e repetida nos artefatos |
 
 **Trade-off central.** Esta change entrega infraestrutura sem nenhuma

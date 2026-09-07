@@ -27,6 +27,11 @@ observabilidade (change seguinte) nem aplicacao (a terceira).
 - **Entrega continua declarativa com ArgoCD.** Git passa a ser a unica fonte da
   verdade do estado do cluster. Nenhum `kubectl apply` imperativo. Drift e
   revertido pelo proprio agente.
+- **Bootstrap por scripts especializados.** A fatia imperativa que antecede o
+  GitOps (criar o cluster, instalar o ArgoCD, restaurar a chave de selagem,
+  apontar a aplicacao raiz) e dividida em um script por responsabilidade,
+  chamados em ordem por um unico orquestrador (`deploy/bootstrap/bootstrap.sh`).
+  Nenhuma ferramenta externa de infraestrutura como codigo entra nesta change.
 - **Estrutura de deploy versionada** em `deploy/base` + `deploy/overlays/{dev,prod}`
   (Kustomize). A diferenca entre ambientes deixa de ser conhecimento tacito e
   vira estrutura de diretorio.
@@ -44,9 +49,10 @@ observabilidade (change seguinte) nem aplicacao (a terceira).
   para o object storage, habilitando recuperacao a ponto no tempo.
 - **Valkey** provisionado como cache distribuido e canal de pub/sub, para uso
   pelas changes seguintes.
-- **Cluster k3s local para desenvolvimento**, com os pre-requisitos de host
-  documentados por sistema operacional. A plataforma nao presume um sistema
-  operacional especifico na maquina do desenvolvedor.
+- **Cluster k3s local para desenvolvimento**, criado por script de
+  inicializacao versionado (nao apenas documentado), com os pre-requisitos de
+  host documentados por sistema operacional. A plataforma nao presume um
+  sistema operacional especifico na maquina do desenvolvedor.
 
 ### Non-goals
 
@@ -112,8 +118,12 @@ Nenhuma. O repositorio nao possui specs anteriores.
   nomenclatura, branch e mensagem de commit.
 - `deploy/base/` e `deploy/overlays/{dev,prod}`: manifests Kustomize da
   plataforma.
-- `deploy/bootstrap/`: instalacao do ArgoCD e da chave de selagem de dev, unico
-  ponto de partida imperativo, executado uma vez por cluster.
+- `deploy/bootstrap/`: unico ponto de partida imperativo, executado uma vez por
+  cluster — um script por responsabilidade (criacao do cluster, instalacao do
+  ArgoCD, restauracao da chave de selagem de dev, aplicacao da Application
+  raiz), chamados em ordem por um orquestrador unico. Um script simetrico
+  desfaz a criacao do cluster, para que a recriacao do zero seja verificavel
+  sem passo manual.
 - Documentacao de requisitos do cluster local, comum a qualquer host, mais uma
   secao de pre-requisitos por sistema operacional do desenvolvedor.
 - `docs/convencoes.md`: monorepo e sua justificativa, prefixo de assembly,
