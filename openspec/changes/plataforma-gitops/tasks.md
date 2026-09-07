@@ -149,7 +149,7 @@ verificacao esta escrito junto quando nao e obvio.
       fixada do operador (confirmado ao vivo).
 - [x] 8.5 Configurar copia base periodica via `ScheduledBackup` com
       `method: plugin`, e registrar a frequencia escolhida.
-- [ ] 8.6 Verificar que o archive esta ativo: confirmar transacoes e observar os
+- [x] 8.6 Verificar que o archive esta ativo: confirmar transacoes e observar os
       segmentos chegando ao armazenamento de objetos.
 - [ ] 8.7 Verificar que falha de archive e observavel: interromper o acesso ao
       armazenamento e confirmar que a condicao e reportada, nao silenciosa.

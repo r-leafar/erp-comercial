@@ -1,5 +1,12 @@
 # Configuracao de backup via Barman Cloud Plugin (D8 do design). Onda -2,
 # junto com o Cluster que a referencia por nome em spec.plugins.
+#
+# GOTCHA (encontrado ao vivo): referencia de Secret e sempre no MESMO
+# namespace do recurso -- por isso existe uma copia de minio-creds-postgres
+# aqui em `data` (deploy/base/plataforma/secrets/minio-creds-postgres-data-ns.yaml),
+# alem da que ja existia em `storage` para o job de buckets. Mesmo valor,
+# dois SealedSecrets (D4: vinculo estrito a nome+namespace nao permite um so
+# servir as duas pontas).
 apiVersion: barmancloud.cnpg.io/v1
 kind: ObjectStore
 metadata:
