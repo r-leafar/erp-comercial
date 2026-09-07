@@ -149,11 +149,24 @@ para a proxima onda quando a anterior esta saudavel.
    -4   espacos de nomes, definicoes de recurso customizado,
         controlador de segredos, operador do banco, plugin de backup (D8)
    -3   objetos de segredo cifrados
-   -2   Postgres, Valkey, MinIO
+   -2   Valkey, MinIO
    -1   provisionamento de repositorios de objetos e credenciais
-    0   (reservado: observabilidade)
+    0   Postgres (CloudNativePG) -- depois do bucket existir (ver nota
+        abaixo); reservado tambem para observabilidade, pela MESMA razao
     1   (reservado: aplicacao, com 0 replicas em dev)
 ```
+
+**Postgres na onda 0, nao -2 (encontrado destruindo e recriando o
+cluster).** O health check customizado do Cluster (D8, tarefa 5.5) exige
+`ContinuousArchiving: True`, que depende do bucket `postgres-backup` e da
+credencial de IAM ja existirem no MinIO -- criados pelo job de
+provisionamento (onda -1). Compartilhar onda com o MinIO criava um impasse
+circular: o ArgoCD esperava o Cluster ficar saudavel para avancar a onda,
+e o Cluster nunca ficava saudavel sem o bucket da onda seguinte. Um
+health check "raso" (o que existia antes de corrigir 5.5) mascarava esse
+problema por acidente -- o Cluster aparentava saudavel cedo demais, e a
+ordem errada nunca aparecia. Corrigir 5.5 tornou este bug visivel, nao o
+causou.
 
 **Consequencia que evita.** Consumidor que sobe antes do seu repositorio existir
 e falha por corrida, com erro que aponta para o lugar errado.

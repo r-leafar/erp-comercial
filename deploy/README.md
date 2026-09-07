@@ -164,10 +164,20 @@ O ArgoCD aplica cada onda somente apos a anterior estar saudavel:
 | -5 | cert-manager (pre-requisito do Barman Cloud Plugin) |
 | -4 | Namespaces, definicoes de recurso customizado, controller do Sealed Secrets, operator do CloudNativePG, Barman Cloud Plugin |
 | -3 | Objetos `SealedSecret` |
-| -2 | Postgres (CloudNativePG), Valkey, MinIO |
+| -2 | Valkey, MinIO |
 | -1 | Job idempotente de provisionamento de buckets e credenciais no MinIO |
-| 0 | (reservado — change `observabilidade`) |
+| 0 | Postgres (CloudNativePG) — depois do bucket existir; reservado tambem para a change `observabilidade`, pela mesma razao (ver gotcha abaixo) |
 | 1 | (reservado — aplicacao, com 0 replicas em desenvolvimento) |
+
+**GOTCHA (encontrado destruindo e recriando o cluster): Postgres precisa
+estar numa onda DEPOIS do bucket, nao junto com o MinIO.** O health check
+customizado do `Cluster` (ver acima) exige `ContinuousArchiving: True`, que
+depende do bucket `postgres-backup` e da credencial de IAM ja existirem —
+criados pelo job da onda -1. Compartilhar onda com o MinIO cria um impasse
+circular: o ArgoCD espera o Cluster ficar saudavel para avancar de onda, e
+o Cluster nunca fica saudavel sem o bucket da onda seguinte. Um health
+check "raso" mascarava esse problema por acidente; corrigi-lo o tornou
+visivel.
 
 **Atencao:** "saudavel" para um recurso customizado depende de o ArgoCD
 saber avalia-lo. Verifique, na versao fixada do ArgoCD e do operator do
