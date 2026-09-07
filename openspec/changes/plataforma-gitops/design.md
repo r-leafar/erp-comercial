@@ -318,6 +318,18 @@ para CRDs desconhecidas so olha a condicao `Ready`. Um `Cluster` do CNPG fica
 Application ficar `Degraded` (antes do patch, permanecia `Healthy`); restaurar
 a credencial volta a `Healthy` assim que o archive volta a funcionar.
 
+**Restauracao exercitada de ponta a ponta (tarefas 8.8/8.9), com um gotcha
+proprio do plugin.** Gravar um dado, remove-lo, restaurar um `Cluster` de
+verificacao para o instante anterior a remocao: dado presente no cluster
+restaurado, confirmando o mecanismo. Um instante anterior a copia base mais
+antiga e recusado (`"no target backup found"`), nunca aplicado
+silenciosamente. Gotcha: a restauracao exige `externalClusters[].barmanObjectStore.serverName`
+explicito apontando para o nome do cluster de origem -- sem ele, o plugin
+usa o nome do cluster **novo** (o que esta sendo criado) como prefixo de
+busca no catalogo, e a restauracao falha com a mesma mensagem de instante
+fora da janela, mesmo com o backup existindo. Receita completa em
+`deploy/README.md`.
+
 ### D9. Valkey como cache e canal de notificacao, com semantica declarada
 
 **Decisao.** Valkey provisionado com dois papeis: armazenamento de cache

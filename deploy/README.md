@@ -256,6 +256,86 @@ do design):
 - Aplicacao roda fora do cluster (D12) -- o dia a dia nao exercita imagem
   nem manifests da aplicacao.
 
+## Recuperacao a ponto no tempo (PITR) do Postgres
+
+Exercitada de ponta a ponta (tarefas 8.8/8.9): gravar um dado, remove-lo,
+restaurar para o instante anterior a remocao, conferir que o dado volta. O
+procedimento cria um `Cluster` **novo** (nao mexe no original) que faz o
+papel de instancia de verificacao:
+
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: <nome-do-cluster-restaurado>
+  namespace: data
+spec:
+  instances: 1
+  storage:
+    size: 10Gi
+  bootstrap:
+    recovery:
+      source: erp-postgres          # nome do Cluster de origem
+      recoveryTarget:
+        targetTime: "<timestamp UTC>"
+  externalClusters:
+    - name: erp-postgres            # precisa bater com o `source` acima
+      barmanObjectStore:
+        serverName: erp-postgres    # GOTCHA abaixo -- nao pode faltar
+        destinationPath: s3://postgres-backup/
+        endpointURL: http://minio.storage.svc.cluster.local:9000
+        s3Credentials:
+          accessKeyId:
+            name: minio-creds-postgres
+            key: POSTGRES_BACKUP_ACCESS_KEY
+          secretAccessKey:
+            name: minio-creds-postgres
+            key: POSTGRES_BACKUP_SECRET_KEY
+        wal:
+          compression: gzip
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: erp-postgres-backup
+```
+
+**GOTCHA (encontrado ao vivo): sem `serverName` explicito, a recuperacao
+falha com `"no target backup found"`, mesmo com o backup existindo.** O
+plugin usa o **proprio nome do cluster novo** como prefixo de busca no
+catalogo de backups por padrao -- nao o nome declarado em
+`bootstrap.recovery.source`. `externalClusters[].barmanObjectStore.serverName`
+corrige isso, apontando explicitamente para o prefixo do cluster de origem.
+Usa-se `barmanObjectStore` classico aqui (nao `plugin`) porque so ele aceita
+`serverName`; o aviso de depreciacao que aparece ao aplicar e esperado e
+inofensivo -- e so para a LEITURA do backup de origem, nao para o
+arquivamento continuo do cluster restaurado (que usa `spec.plugins`
+normalmente).
+
+**Pre-requisito facil de esquecer:** a recuperacao busca uma copia base
+(`Backup`) existente, nao so os segmentos de WAL. Sem nenhuma copia base
+ainda tirada (a `ScheduledBackup` diaria pode nao ter rodado ainda num
+cluster novo), tambem falha com `"no target backup found"` -- tirar uma
+copia sob demanda antes de testar:
+
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: <nome>
+  namespace: data
+spec:
+  cluster:
+    name: erp-postgres
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+```
+
+**Instante fora da janela disponivel (antes da copia base mais antiga) e
+recusado**, nunca aplicado silenciosamente: o job de recuperacao falha com
+`"no target backup found"` e o Cluster nunca fica `Ready`.
+
 ## Pendencias que esta change deixa em aberto
 
 - **Provedor de object storage de producao.** O overlay `prod` expressa o
