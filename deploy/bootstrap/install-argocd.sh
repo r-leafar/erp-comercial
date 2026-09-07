@@ -24,4 +24,14 @@ kctl apply -n argocd --server-side --force-conflicts -f "$MANIFEST_URL"
 log "Aguardando os deployments do ArgoCD ficarem disponiveis..."
 kctl -n argocd wait --for=condition=available --timeout=300s deployment --all
 
+# GOTCHA DE WSL2: o resolvedor DNS puro do Go (usado pelo argocd-repo-server
+# para clonar o repositorio) falha neste ambiente com "no such host" contra
+# o CoreDNS do proprio cluster -- o MESMO problema, pela mesma causa, que
+# ja apareceu com o binario do kustomize no host (ver deploy/README.md).
+# GODEBUG=netdns=cgo forca o resolvedor via glibc, que funciona. Idempotente:
+# `kubectl set env` com o mesmo valor e no-op.
+log "Aplicando o contorno de DNS do WSL2 no argocd-repo-server..."
+kctl set env deployment/argocd-repo-server -n argocd GODEBUG=netdns=cgo
+kctl -n argocd rollout status deployment/argocd-repo-server --timeout=120s
+
 log "ArgoCD instalado e disponivel."
