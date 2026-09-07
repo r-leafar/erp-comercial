@@ -42,4 +42,17 @@ log "Registrando o health check customizado do Cluster (CNPG)..."
 kctl patch configmap argocd-cm -n argocd --type merge \
   --patch-file "${SCRIPT_DIR}/argocd-cnpg-health-patch.yaml"
 
+# Desliga o TLS proprio do servidor para expor via Ingress generico (sem
+# anotacao especifica de controller). Ver argocd-insecure-patch.yaml.
+# ConfigMap nao reinicia pod sozinho -- so reinicia se o patch realmente
+# mudou algo (idempotente: reexecucao sem mudanca nao reinicia o server).
+log "Desligando o TLS proprio do argocd-server (exposicao via Ingress)..."
+patch_result=$(kctl patch configmap argocd-cmd-params-cm -n argocd --type merge \
+  --patch-file "${SCRIPT_DIR}/argocd-insecure-patch.yaml")
+echo "$patch_result"
+if [[ "$patch_result" != *"(no change)"* ]]; then
+  kctl -n argocd rollout restart deployment/argocd-server
+  kctl -n argocd rollout status deployment/argocd-server --timeout=120s
+fi
+
 log "ArgoCD instalado e disponivel."
