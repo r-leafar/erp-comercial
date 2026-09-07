@@ -1,17 +1,10 @@
-# Operador (onda -4) e cluster (onda -2) do CloudNativePG (D8 do design).
-# O operador roda em cnpg-system (namespace proprio, criado na onda -4);
-# o Cluster de banco roda no namespace `data`.
+# Cluster de banco (D8 do design), onda -2. O operador que o reconcilia
+# vive em deploy/base/plataforma/cnpg-operator (onda -4, separado por
+# precisar de uma onda diferente).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v1.30.0/cnpg-1.30.0.yaml
   - cluster.yaml
   - scheduled-backup.yaml
-patches:
-  - patch: |-
-      - op: add
-        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
-        value: "-4"
-    target:
-      kind: Deployment
-      name: cnpg-controller-manager
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "-2"

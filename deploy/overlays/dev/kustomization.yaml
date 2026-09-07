@@ -7,6 +7,8 @@ kind: Kustomization
 resources:
   - ../../base/plataforma/namespaces
   - ../../base/plataforma/sealed-secrets
+  - ../../base/plataforma/cnpg-operator
   - ../../base/plataforma/postgres
   - ../../base/plataforma/valkey
   - ../../base/plataforma/minio
+  - ../../base/plataforma/minio-provision

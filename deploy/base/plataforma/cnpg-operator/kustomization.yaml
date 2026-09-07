@@ -1,0 +1,13 @@
+# Operador do CloudNativePG (D8 do design), isolado do Cluster de banco
+# (deploy/base/plataforma/postgres) porque as ondas sao diferentes: o
+# operador e onda -4 (precisa existir antes de qualquer Cluster), o
+# Cluster e onda -2. Misturar os dois no mesmo Kustomization e so anotar
+# o Deployment do operador deixava o resto do pacote (CRDs, ServiceAccount,
+# RBAC) na onda padrao (0) -- impasse encontrado rodando contra cluster de
+# verdade: o Deployment nunca ficava saudavel esperando por eles.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v1.30.0/cnpg-1.30.0.yaml
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "-4"
