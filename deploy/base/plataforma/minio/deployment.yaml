@@ -1,0 +1,60 @@
+# MinIO em modo standalone (D5 do design): existe por FIDELIDADE ao
+# conjunto de recursos da API S3, nao por durabilidade. So roda em
+# desenvolvimento -- producao usa provedor de terceiro (nao provisionado
+# por esta change). 1 replica, sem redundancia: propriedade de dev
+# deliberada, nunca confundir com ambiente duravel (ver proposal.md,
+# "Risco assumido e registrado").
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  labels:
+    app.kubernetes.io/name: minio
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # evita dois pods disputando o mesmo PVC ReadWriteOnce
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minio
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minio
+    spec:
+      containers:
+        - name: minio
+          image: quay.io/minio/minio:RELEASE.2026-08-13T05-33-47Z
+          args:
+            - server
+            - /data
+            - --console-address
+            - ":9001"
+          ports:
+            - name: api
+              containerPort: 9000
+            - name: console
+              containerPort: 9001
+          envFrom:
+            # Credencial sempre por referencia a Secret (D4, D6) -- o
+            # SealedSecret que produz `minio-credentials` e criado na
+            # tarefa 6.4.
+            - secretRef:
+                name: minio-credentials
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: api
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: api
+            initialDelaySeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: minio-data

@@ -1,0 +1,63 @@
+# Job idempotente de provisionamento (tarefas 7.2-7.5). Onda -1: roda
+# depois do MinIO existir (onda -2) e antes de consumidores que dependem
+# dos buckets (onda 0 em diante) -- Loki/Tempo/Mimir NAO criam bucket
+# sozinhos e falhariam sem ele.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-provision-buckets
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    # Job e imutavel; sem esta politica o segundo sync do ArgoCD falharia
+    # ao tentar reaplicar o mesmo Job (mesmo padrao usado pelos hooks de
+    # migration descritos no contexto do projeto).
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: provision
+          image: minio/mc:RELEASE.2026-08-19T18-45-13Z
+          command: ["/bin/sh", "/scripts/provision.sh"]
+          envFrom:
+            - secretRef:
+                name: minio-credentials
+            - secretRef:
+                name: minio-creds-mimir
+            - secretRef:
+                name: minio-creds-loki
+            - secretRef:
+                name: minio-creds-tempo
+            - secretRef:
+                name: minio-creds-postgres
+            - secretRef:
+                name: minio-creds-app
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+            - name: policies
+              mountPath: /policies
+      volumes:
+        - name: script
+          configMap:
+            name: minio-provision-script
+            items:
+              - key: provision.sh
+                path: provision.sh
+        - name: policies
+          configMap:
+            name: minio-provision-script
+            items:
+              - key: mimir.json
+                path: mimir.json
+              - key: loki.json
+                path: loki.json
+              - key: tempo.json
+                path: tempo.json
+              - key: postgres.json
+                path: postgres.json
+              - key: app.json
+                path: app.json

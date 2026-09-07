@@ -1,0 +1,22 @@
+# Controller do Sealed Secrets (D4 do design). Onda -4: precisa existir
+# antes de qualquer objeto SealedSecret (onda -3), senao os objetos ficam
+# parados sem virar Secret, e o erro nao e obvio.
+#
+# PONTO A VERIFICAR (registrado, nao assumido): a partir de qual namespace
+# o controller busca por padrao o Secret com a chave de selagem (rotulo
+# sealedsecrets.bitnami.com/sealed-secrets-key=active). Versoes recentes
+# usam o proprio namespace de instalacao do controller; confirmar contra a
+# documentacao da v0.39.1 antes de confiar em restore-sealing-key.sh.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: sealed-secrets
+resources:
+  - https://github.com/bitnami/sealed-secrets/releases/download/v0.39.1/controller.yaml
+patches:
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-4"
+    target:
+      kind: Deployment
+      name: sealed-secrets-controller

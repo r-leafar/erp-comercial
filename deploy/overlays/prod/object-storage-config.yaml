@@ -1,0 +1,18 @@
+# Overlay de PRODUCAO: apenas estrutura e contrato de configuracao
+# (non-goal registrado no proposal; D2, D5, D6, D7 do design). Nenhum valor
+# aqui e funcional -- sao placeholders que documentam a FORMA que a
+# configuracao de object storage assume em producao, ate que um provedor
+# real seja escolhido.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: object-storage-config
+data:
+  endpoint: "<TBD: endpoint do provedor de producao, ainda nao escolhido>"
+  region: "<TBD: regiao real do provedor>"
+  forcePathStyle: "false"   # producao usa enderecamento por subdominio (D6)
+  tls: "true"                # producao exige canal seguro (D6)
+  # credencial: NAO vive aqui -- sempre por referencia a Secret (D4, D6).
+  # Em producao a chave de selagem e material sensivel, fora do
+  # repositorio, com backup proprio (D4) -- diferente da chave de dev
+  # versionada em deploy/bootstrap/chave-selagem-dev.yaml.

@@ -1,0 +1,73 @@
+# Script do Job de provisionamento (tarefas 7.2, 7.3). Cria os
+# repositorios e uma credencial por consumidor, restrita aos seus proprios
+# repositorios (spec plataforma/armazenamento-de-objetos). Todas as
+# credenciais (root e por consumidor) vem de Secret, nunca de valor fixo no
+# manifest (D4, D6) -- o Job so CONFIGURA o MinIO para aceitar credenciais
+# ja escolhidas, nunca gera nem grava segredo novo.
+#
+# PONTO A VERIFICAR: `mc admin policy attach` e o nome do subcomando em
+# versoes recentes do mc; confirmar contra a versao efetivamente puxada
+# pela imagem antes de considerar a tarefa 7.4/7.5 encerrada.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minio-provision-script
+data:
+  provision.sh: |
+    #!/bin/sh
+    set -eu
+
+    ALIAS=local
+    mc alias set "$ALIAS" "http://minio.storage.svc.cluster.local:9000" \
+      "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+
+    provision() {
+      policy_name="$1"; access_key="$2"; secret_key="$3"; policy_file="$4"
+      shift 4
+      for bucket in "$@"; do
+        mc mb --ignore-existing "$ALIAS/$bucket"
+      done
+      mc admin policy create "$ALIAS" "$policy_name" "$policy_file"
+      mc admin user add "$ALIAS" "$access_key" "$secret_key"
+      mc admin policy attach "$ALIAS" "$policy_name" --user "$access_key"
+    }
+
+    provision policy-mimir "$MIMIR_ACCESS_KEY" "$MIMIR_SECRET_KEY" \
+      /policies/mimir.json mimir-blocks mimir-ruler mimir-alertmanager
+
+    provision policy-loki "$LOKI_ACCESS_KEY" "$LOKI_SECRET_KEY" \
+      /policies/loki.json loki-chunks loki-ruler
+
+    provision policy-tempo "$TEMPO_ACCESS_KEY" "$TEMPO_SECRET_KEY" \
+      /policies/tempo.json tempo-traces
+
+    provision policy-postgres "$POSTGRES_BACKUP_ACCESS_KEY" "$POSTGRES_BACKUP_SECRET_KEY" \
+      /policies/postgres.json postgres-backup
+
+    provision policy-app "$APP_ACCESS_KEY" "$APP_SECRET_KEY" \
+      /policies/app.json arquivos
+
+    echo "Provisionamento concluido."
+  mimir.json: |
+    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":[
+      "arn:aws:s3:::mimir-blocks","arn:aws:s3:::mimir-blocks/*",
+      "arn:aws:s3:::mimir-ruler","arn:aws:s3:::mimir-ruler/*",
+      "arn:aws:s3:::mimir-alertmanager","arn:aws:s3:::mimir-alertmanager/*"
+    ]}]}
+  loki.json: |
+    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":[
+      "arn:aws:s3:::loki-chunks","arn:aws:s3:::loki-chunks/*",
+      "arn:aws:s3:::loki-ruler","arn:aws:s3:::loki-ruler/*"
+    ]}]}
+  tempo.json: |
+    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":[
+      "arn:aws:s3:::tempo-traces","arn:aws:s3:::tempo-traces/*"
+    ]}]}
+  postgres.json: |
+    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":[
+      "arn:aws:s3:::postgres-backup","arn:aws:s3:::postgres-backup/*"
+    ]}]}
+  app.json: |
+    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":[
+      "arn:aws:s3:::arquivos","arn:aws:s3:::arquivos/*"
+    ]}]}
