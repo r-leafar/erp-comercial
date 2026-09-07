@@ -361,6 +361,17 @@ kubectl port-forward svc/minio -n storage 9001:9001
 Depois, abra `http://localhost:8080` (ArgoCD) e `http://localhost:9001`
 (MinIO) no navegador do Windows normalmente.
 
+**Credenciais de login:**
+
+```bash
+# ArgoCD -- usuario "admin"
+kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d; echo
+
+# MinIO -- usuario e senha
+kubectl get secret minio-credentials -n storage -o jsonpath='{.data.MINIO_ROOT_USER}' | base64 -d; echo
+kubectl get secret minio-credentials -n storage -o jsonpath='{.data.MINIO_ROOT_PASSWORD}' | base64 -d; echo
+```
+
 ### Por que existe um Ingress, se o navegador do Windows nao usa
 
 O k3s ja traz um Ingress controller (Traefik, escutando nas portas 80/443
@@ -407,11 +418,6 @@ anotacao so do Traefik, outra so do nginx-ingress, etc.) -- quebrando a
 genericidade. Com o backend em texto claro, qualquer Ingress padrao
 funciona sem anotacao nenhuma. So vale para dev; em producao a exposicao
 externa e outra decisao, fora do escopo desta change.
-
-Login do ArgoCD: usuario `admin`, senha em
-`kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d`.
-Login do MinIO: `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` no secret
-`minio-credentials` (namespace `storage`).
 
 ## Pendencias que esta change deixa em aberto
 
