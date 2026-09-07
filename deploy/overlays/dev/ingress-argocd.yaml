@@ -1,0 +1,30 @@
+# Painel do ArgoCD, acessivel sem kubectl port-forward. API padrao
+# (networking.k8s.io/v1), sem CRD nem anotacao especifica de controller --
+# funciona com o Traefik que o k3s ja traz, ou com qualquer outro que vier
+# a substitui-lo (nenhum ingressClassName fixado: usa o default do
+# cluster).
+#
+# Host usa nip.io (DNS coringa publico: <nome>.127.0.0.1.nip.io resolve
+# para 127.0.0.1) -- nenhuma edicao de hosts file, e 127.0.0.1 nunca muda,
+# ao contrario do IP interno do WSL2. TLS proprio do ArgoCD desligado via
+# deploy/bootstrap/argocd-insecure-patch.yaml, para o backend em texto
+# claro funcionar com qualquer Ingress sem anotacao de terminacao TLS.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  rules:
+    - host: argocd.127.0.0.1.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80

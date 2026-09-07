@@ -1,0 +1,12 @@
+# Desliga o TLS proprio do argocd-server (D-painel-dev). Sem isso, expor o
+# ArgoCD atras de um Ingress exigiria uma anotacao ESPECIFICA do controller
+# escolhido para falar HTTPS com o backend (ex.: uma anotacao so do
+# Traefik, outra so do nginx-ingress) -- quebrando a genericidade desejada.
+# Com o backend em texto claro, qualquer Ingress padrao (networking.k8s.io/v1)
+# funciona sem anotacao nenhuma, e o proprio Ingress fica responsavel por
+# terminar TLS/HTTP para o navegador.
+#
+# So afeta o dev: em producao a decisao de exposicao externa e outra (fora
+# do escopo desta change).
+data:
+  server.insecure: "true"

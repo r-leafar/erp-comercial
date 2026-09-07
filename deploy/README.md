@@ -346,6 +346,42 @@ spec:
 recusado**, nunca aplicado silenciosamente: o job de recuperacao falha com
 `"no target backup found"` e o Cluster nunca fica `Ready`.
 
+## Acessando os paineis (ArgoCD, MinIO) sem port-forward
+
+O k3s ja traz um Ingress controller (Traefik, escutando nas portas 80/443
+do proprio host). `deploy/overlays/dev/ingress-argocd.yaml` e
+`ingress-minio.yaml` expoem os dois paineis por ele, de forma generica --
+API padrao `networking.k8s.io/v1`, sem CRD nem anotacao especifica de
+controller, sem `ingressClassName` fixado (usa o default do cluster). Troque
+o Traefik por outro Ingress e o mesmo manifesto continua funcionando.
+
+**Hosts via nip.io, sem editar o `hosts` do Windows.** `nip.io` e um DNS
+publico coringa: `<qualquer-nome>.127.0.0.1.nip.io` resolve para
+`127.0.0.1` sem cadastro nenhum. Usa-se `127.0.0.1` (nunca muda) em vez do
+IP interno do WSL2 (que muda entre reinicios) -- o WSL2 ja encaminha
+`localhost` nos dois sentidos com o Windows, entao o navegador so precisa
+resolver o nome (uma consulta DNS normal, feita pelo Windows).
+
+```
+   ArgoCD:  http://argocd.127.0.0.1.nip.io/
+   MinIO:   http://minio.127.0.0.1.nip.io/
+```
+
+**Por que o TLS do ArgoCD fica desligado
+(`deploy/bootstrap/argocd-insecure-patch.yaml`, aplicado por
+`install-argocd.sh`).** Sem isso, o backend fala HTTPS com certificado
+autoassinado, e cada Ingress controller exigiria uma anotacao DIFERENTE
+para saber terminar TLS e reencaminhar em HTTPS para o backend (uma
+anotacao so do Traefik, outra so do nginx-ingress, etc.) -- quebrando a
+genericidade. Com o backend em texto claro, qualquer Ingress padrao
+funciona sem anotacao nenhuma. So vale para dev; em producao a exposicao
+externa e outra decisao, fora do escopo desta change.
+
+Login do ArgoCD: usuario `admin`, senha em
+`kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d`.
+Login do MinIO: `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` no secret
+`minio-credentials` (namespace `storage`).
+
 ## Pendencias que esta change deixa em aberto
 
 - **Provedor de object storage de producao.** O overlay `prod` expressa o

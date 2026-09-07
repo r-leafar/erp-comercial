@@ -1,0 +1,23 @@
+# Console do MinIO, acessivel sem kubectl port-forward. Mesmo padrao do
+# ingress-argocd.yaml: API generica, host via nip.io, sem TLS (dev ja nao
+# usa TLS aqui, D6 do design -- nao precisa de ajuste equivalente ao do
+# ArgoCD).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minio-console
+  namespace: storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  rules:
+    - host: minio.127.0.0.1.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: minio
+                port:
+                  number: 9001

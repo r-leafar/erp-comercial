@@ -15,3 +15,5 @@ resources:
   - ../../base/plataforma/valkey
   - ../../base/plataforma/minio
   - ../../base/plataforma/minio-provision
+  - ingress-argocd.yaml
+  - ingress-minio.yaml
