@@ -47,9 +47,20 @@ equivalente movel.
 
 ### Consumo de recursos
 
-A ser preenchido apos a tarefa 10.5 (medir o consumo de memoria da
-plataforma completa e ajustar limites). Ate la, nenhum numero deve ser
-assumido pelas changes seguintes.
+Medido ao vivo (tarefas 2.3/10.5), plataforma completa e saudavel, sem a
+aplicacao rodando:
+
+```
+   CPU do no:      ~580m (7% de um host com 8 vCPU)
+   Memoria do no:  ~4.4Gi (27% do alocavel)
+   Host (free -h): 6.4Gi livre + 5.8Gi buff/cache, 11Gi "available"
+```
+
+MinIO e o maior consumidor de memoria isolado (~430Mi); o restante fica
+abaixo de 200Mi por componente. Numero de referencia para as changes
+seguintes dimensionarem o que vao somar (particularmente `observabilidade`,
+que grava volume continuamente). Medido num host com 15Gi de RAM total —
+recalcular se o seu diferir muito disso.
 
 ## Pre-requisitos por sistema operacional
 
@@ -164,6 +175,17 @@ CloudNativePG, se ha health check conhecido para o `Cluster` do CNPG. Se
 nao houver, declare a avaliacao explicitamente — esta e a falha mais
 provavel do bootstrap, e deve ser testada recriando o cluster, nao so na
 primeira execucao.
+
+**Confirmado ao vivo: nao havia.** O fallback generico do ArgoCD para o
+`Cluster` do CNPG so olha a condicao `Ready` — um cluster fica `Ready` mesmo
+com o archive continuo quebrado (`ContinuousArchiving: False`), e a
+Application inteira aparecia "Healthy" apesar do backup estar parado.
+Corrigido com um health check customizado
+(`deploy/bootstrap/argocd-cnpg-health-patch.yaml`, registrado por
+`install-argocd.sh` em `resource.customizations.health.postgresql.cnpg.io_Cluster`)
+que confere `ContinuousArchiving` alem de `Ready`. Testado quebrando a
+credencial do backup de proposito: a Application vai para `Degraded`; ao
+restaurar, volta a `Healthy` assim que o archive volta a funcionar.
 
 ## Contrato de configuracao de acesso a objetos (S3)
 

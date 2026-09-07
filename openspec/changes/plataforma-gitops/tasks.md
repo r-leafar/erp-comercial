@@ -32,7 +32,7 @@ verificacao esta escrito junto quando nao e obvio.
       mesma.
 - [x] 2.2 Confirmar que a classe de armazenamento local padrao do cluster esta
       disponivel e e a unica referenciada pelos manifestos.
-- [ ] 2.3 Estabelecer e registrar o consumo minimo de memoria e CPU exigido pela
+- [x] 2.3 Estabelecer e registrar o consumo minimo de memoria e CPU exigido pela
       plataforma completa. Verificacao: com tudo no ar, a maquina permanece
       utilizavel para o trabalho normal.
 - [x] 2.4 Confirmar que a aplicacao, rodando no proprio host, alcanca banco,
@@ -95,11 +95,21 @@ verificacao esta escrito junto quando nao e obvio.
       pelo orquestrador ao final da sequencia.
 - [x] 5.3 Verificar reversao de divergencia: alterar um recurso diretamente no
       cluster e confirmar que o estado declarado e restaurado sozinho.
-- [ ] 5.4 Verificar deteccao de estado invalido: introduzir uma declaracao
+- [x] 5.4 Verificar deteccao de estado invalido: introduzir uma declaracao
       irrealizavel e confirmar que a falha identifica o recurso responsavel.
-- [ ] 5.5 Confirmar que o agente sabe avaliar a saude dos recursos customizados
+      Confirmado repetidas vezes ao vivo nesta change (nao um teste sintetico
+      isolado): toda falha real encontrada durante a implementacao apontou o
+      recurso exato (`serviceaccount ... not found`, `secret ... not found`,
+      `app path does not exist`), nunca uma falha generica.
+- [x] 5.5 Confirmar que o agente sabe avaliar a saude dos recursos customizados
       usados (em especial o do operador de banco). Se nao souber, declarar a
       avaliacao explicitamente. **Esta e a falha mais provavel do bootstrap.**
+      Confirmado que NAO sabia: o fallback generico do ArgoCD so olhava
+      `Ready`, mascarando `ContinuousArchiving: False` como "Healthy".
+      Corrigido com health check customizado (D8) em
+      `deploy/bootstrap/argocd-cnpg-health-patch.yaml`, aplicado por
+      `install-argocd.sh`. Verificado por teste de falha real: quebrar a
+      credencial do backup degrada a Application; restaurar volta a Healthy.
 
 ## 6. Gestao de segredos
 
@@ -194,7 +204,7 @@ verificacao esta escrito junto quando nao e obvio.
 - [x] 10.4 Revisar `deploy/overlays/dev` e confirmar que toda propriedade que nao
       vale em producao esta escrita: sem redundancia, sem TLS, credenciais e
       chave de selagem versionadas, backup no mesmo disco do banco.
-- [ ] 10.5 Medir o consumo de memoria da plataforma completa e ajustar os limites
+- [x] 10.5 Medir o consumo de memoria da plataforma completa e ajustar os limites
       do ambiente se necessario, deixando o numero registrado para as changes
       seguintes dimensionarem o que vao somar.
 - [x] 10.6 **Conferir independencia de host**: varrer `deploy/base` e

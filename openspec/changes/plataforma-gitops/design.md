@@ -305,6 +305,19 @@ para prover durabilidade. Registrado aqui porque a diferenca entre "temos
 backup" e "temos o mecanismo de backup" e exatamente onde as pessoas se
 enganam.
 
+**Health check customizado: o ArgoCD, sozinho, mascarava esta mesma falha.**
+Risco ja previsto em D3 ("saudavel para um recurso customizado depende de o
+agente saber avalia-lo") e confirmado ao vivo: o fallback generico do ArgoCD
+para CRDs desconhecidas so olha a condicao `Ready`. Um `Cluster` do CNPG fica
+`Ready` mesmo com `ContinuousArchiving: False` -- a aplicacao inteira aparecia
+"Healthy" enquanto o backup estava quebrado. Corrigido com um script Lua em
+`resource.customizations.health.postgresql.cnpg.io_Cluster`
+(`deploy/bootstrap/argocd-cnpg-health-patch.yaml`, aplicado por
+`install-argocd.sh`), que confere `ContinuousArchiving` alem de `Ready`.
+**Verificado por teste de falha real**: quebrar a credencial do backup faz a
+Application ficar `Degraded` (antes do patch, permanecia `Healthy`); restaurar
+a credencial volta a `Healthy` assim que o archive volta a funcionar.
+
 ### D9. Valkey como cache e canal de notificacao, com semantica declarada
 
 **Decisao.** Valkey provisionado com dois papeis: armazenamento de cache
