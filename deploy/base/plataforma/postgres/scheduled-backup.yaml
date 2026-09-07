@@ -1,0 +1,13 @@
+# Copia base periodica (tarefa 8.4, D8 do design). Frequencia: diaria, as
+# 03h -- fora do horario de trabalho do desenvolvedor. Ajustar aqui e em
+# deploy/README.md juntos, se a frequencia mudar.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: erp-postgres-base-backup
+  namespace: data
+spec:
+  schedule: "0 0 3 * * *"
+  backupOwnerReference: self
+  cluster:
+    name: erp-postgres

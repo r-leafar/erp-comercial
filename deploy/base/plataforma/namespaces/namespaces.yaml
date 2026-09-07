@@ -1,0 +1,38 @@
+# Namespaces tecnicos da plataforma (ver docs/convencoes.md e D3 do design).
+# Onda -4: precisam existir antes de qualquer recurso que os referencie.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sealed-secrets
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: data
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: app
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+# cnpg-system NAO e declarado aqui: o manifesto oficial do operador
+# CloudNativePG (deploy/base/plataforma/postgres) ja o cria.

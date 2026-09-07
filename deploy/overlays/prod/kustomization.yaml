@@ -1,0 +1,6 @@
+# Estrutura e contrato de configuracao apenas -- nao provisiona ambiente de
+# producao operante (non-goal registrado no proposal desta change).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - object-storage-config.yaml

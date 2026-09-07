@@ -1,0 +1,12 @@
+# Overlay de DESENVOLVIMENTO (D2 do design). So contem as DIFERENCAS: MinIO
+# local, sem TLS, credenciais fixas versionadas, 1 replica, sem redundancia
+# -- propriedades de dev que NAO valem em producao (ver proposal.md,
+# "Risco assumido e registrado").
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base/plataforma/namespaces
+  - ../../base/plataforma/sealed-secrets
+  - ../../base/plataforma/postgres
+  - ../../base/plataforma/valkey
+  - ../../base/plataforma/minio
