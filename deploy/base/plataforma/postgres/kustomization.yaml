@@ -1,7 +1,19 @@
-# Cluster de banco (D8 do design), onda -2. O operador que o reconcilia
+# Cluster de banco (D8 do design), onda 0. O operador que o reconcilia
 # vive em deploy/base/plataforma/cnpg-operator (onda -4); o plugin de
 # backup, em deploy/base/plataforma/barman-cloud-plugin (onda -4 tambem,
 # separados por precisarem de ondas diferentes da do Cluster).
+#
+# ONDA 0, NAO -2 (encontrado ao vivo, destruindo e recriando o cluster):
+# o health check customizado (D8, tarefa 5.5) so considera o Cluster
+# saudavel com ContinuousArchiving: True, que exige o bucket
+# `postgres-backup` e a credencial de IAM ja existirem no MinIO -- criados
+# pelo job de provisionamento (onda -1). Compartilhar a onda -2 com o
+# MinIO criava um impasse circular: o ArgoCD esperava o Cluster ficar
+# saudavel antes de avancar para a onda -1 (onde o bucket que ele precisa
+# e criado), e o Cluster nunca ficava saudavel sem o bucket. Corrigir um
+# health check "raso" (5.5) expos esta dependencia que antes ficava
+# mascarada -- o Cluster aparentava "saudavel" cedo demais, entao a onda
+# avancava sem ninguem perceber a ordem errada.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -9,4 +21,4 @@ resources:
   - scheduled-backup.yaml
   - objectstore.yaml
 commonAnnotations:
-  argocd.argoproj.io/sync-wave: "-2"
+  argocd.argoproj.io/sync-wave: "0"
