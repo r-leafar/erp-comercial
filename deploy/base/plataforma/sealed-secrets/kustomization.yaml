@@ -12,11 +12,9 @@ kind: Kustomization
 namespace: sealed-secrets
 resources:
   - https://github.com/bitnami/sealed-secrets/releases/download/v0.39.1/controller.yaml
-patches:
-  - patch: |-
-      - op: add
-        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
-        value: "-4"
-    target:
-      kind: Deployment
-      name: sealed-secrets-controller
+# TODO o pacote (CRD, ServiceAccount, RBAC, Deployment, Service) precisa da
+# MESMA onda -4 -- anotar so o Deployment deixa o resto na onda padrao (0),
+# que vem DEPOIS da -4, e o Deployment nunca fica saudavel esperando por
+# eles (bug real, encontrado rodando contra cluster de verdade).
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "-4"

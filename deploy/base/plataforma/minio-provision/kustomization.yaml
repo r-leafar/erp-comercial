@@ -1,0 +1,14 @@
+# Job idempotente de provisionamento de buckets/credenciais (tarefas
+# 7.2-7.5). Onda -1: depende do MinIO existir (onda -2, deploy/base/plataforma/minio).
+# commonAnnotations cobre TAMBEM o ConfigMap do script -- o Job o monta como
+# volume, entao precisa da MESMA onda que o Job (mesmo bug de anotacao
+# incompleta ja corrigido em cnpg-operator/sealed-secrets, um nivel abaixo:
+# sem isso o ConfigMap cairia na onda padrao 0, depois do Job que o exige).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: storage
+resources:
+  - buckets-job-script.yaml
+  - buckets-job.yaml
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "-1"

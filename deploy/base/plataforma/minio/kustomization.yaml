@@ -1,3 +1,6 @@
+# Onda -2 (D3 do design). O Job de provisionamento de buckets/credenciais
+# (onda -1) vive em deploy/base/plataforma/minio-provision, separado por
+# depender do MinIO ja estar de pe.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: storage
@@ -5,5 +8,5 @@ resources:
   - deployment.yaml
   - service.yaml
   - pvc.yaml
-  - buckets-job-script.yaml
-  - buckets-job.yaml
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "-2"
