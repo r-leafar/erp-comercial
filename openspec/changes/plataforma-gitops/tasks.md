@@ -204,16 +204,30 @@ verificacao esta escrito junto quando nao e obvio.
 
 ## 10. Verificacao de ponta a ponta
 
-- [ ] 10.1 **Destruir o cluster por completo** executando
+- [x] 10.1 **Destruir o cluster por completo** executando
       `deploy/bootstrap/destroy-cluster.sh` **e recria-lo do zero** executando
       apenas `deploy/bootstrap/bootstrap.sh`. Criterio de pronto da change:
       banco, cache e armazenamento ficam disponiveis e configurados sem
       nenhum passo manual fora do que esta versionado.
+      Executado de verdade pelo usuario. Todos os 9 SealedSecrets ja
+      versionados decifraram no cluster novo; todos os pods (ArgoCD,
+      cert-manager, plugin, operador, Postgres, Valkey, MinIO) subiram
+      Running sem nenhum passo manual alem dos dois scripts. Encontrou e
+      corrigiu, no processo, o impasse circular de onda registrado em D3
+      (Postgres precisava estar depois do bucket, nao junto com o MinIO).
 - [ ] 10.2 Executar `deploy/bootstrap/bootstrap.sh` novamente sobre o
       ambiente ja provisionado e confirmar que conclui sem erro e sem alterar
       dados — idempotencia de cada script individual, nao so do conjunto.
-- [ ] 10.3 Conferir a ordenacao observando as ondas: nenhum consumidor iniciou
-      antes de seu pre-requisito estar utilizavel.
+      Cada script individual ja foi verificado idempotente isoladamente
+      (2.6, 2.8, 5.1, 6.3: `kubectl apply`/`set env`/`patch --type merge`
+      sao no-op sobre o mesmo valor), mas o `bootstrap.sh` completo, de
+      ponta a ponta, nao foi reexecutado sobre o ambiente ja provisionado
+      apos o ciclo de destruir/recriar -- ainda pendente.
+- [x] 10.3 Conferir a ordenacao observando as ondas: nenhum consumidor iniciou
+      antes de seu pre-requisito estar utilizavel. Confirmado na
+      recriacao: cert-manager -> operador/plugin/sealed-secrets ->
+      segredos -> Valkey/MinIO -> job de buckets -> Postgres, nesta ordem,
+      sem nenhum consumidor adiantado.
 - [x] 10.4 Revisar `deploy/overlays/dev` e confirmar que toda propriedade que nao
       vale em producao esta escrita: sem redundancia, sem TLS, credenciais e
       chave de selagem versionadas, backup no mesmo disco do banco.
