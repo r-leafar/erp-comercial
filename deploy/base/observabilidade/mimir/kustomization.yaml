@@ -1,0 +1,11 @@
+# Onda 0 (mesma onda do Tempo e do Postgres em plataforma-gitops): depende
+# dos buckets ja existirem (onda -1, minio-provision) e do segredo ja
+# existir (onda -3, observabilidade/secrets).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: observability
+resources:
+  - deployment.yaml
+  - service.yaml
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "0"

@@ -1,0 +1,173 @@
+# Emissor sintetico (D8 do design, tarefa 8.1): envia os tres sinais por
+# OTLP para o mesmo endereco que uma aplicacao real usaria, simulando uma
+# fronteira assincrona (produtor/consumidor separados por uma pausa) com
+# propagacao de contexto de rastreamento -- ou, na variante "negativa"
+# (PROPAGATE_CONTEXT=false), sem propagar, para provar que a ausencia e
+# detectavel na propria consulta (tarefa 8.4). So biblioteca padrao do
+# Python: nada para instalar, nada para manter.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: synthetic-emitter-script
+data:
+  emit.py: |
+    import json
+    import os
+    import random
+    import socket
+    import time
+    import urllib.request
+
+    OTLP_ENDPOINT = os.environ.get("OTLP_ENDPOINT", "http://alloy.observability.svc.cluster.local:4318")
+    PROPAGATE_CONTEXT = os.environ.get("PROPAGATE_CONTEXT", "true").lower() == "true"
+    SERVICE_NAME = "synthetic-emitter"
+
+
+    def rand_hex(n_bytes):
+        return os.urandom(n_bytes).hex()
+
+
+    def now_ns():
+        return int(time.time() * 1e9)
+
+
+    def post(path, payload):
+        req = urllib.request.Request(
+            f"{OTLP_ENDPOINT}{path}",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = resp.read()
+            print(f"POST {path} -> {resp.status} {body!r}")
+            if resp.status >= 300:
+                raise RuntimeError(f"falha ao enviar para {path}: {resp.status}")
+
+
+    def resource_attrs():
+        return [{"key": "service.name", "value": {"stringValue": SERVICE_NAME}}]
+
+
+    def send_span(trace_id, span_id, parent_span_id, name, attrs, start_ns, end_ns):
+        span = {
+            "traceId": trace_id,
+            "spanId": span_id,
+            "name": name,
+            "kind": 3,  # SPAN_KIND_PRODUCER ou similar; nao critico para a prova
+            "startTimeUnixNano": str(start_ns),
+            "endTimeUnixNano": str(end_ns),
+            "attributes": attrs,
+            "status": {},
+        }
+        if parent_span_id:
+            span["parentSpanId"] = parent_span_id
+        post("/v1/traces", {
+            "resourceSpans": [{
+                "resource": {"attributes": resource_attrs()},
+                "scopeSpans": [{"spans": [span]}],
+            }]
+        })
+
+
+    def send_log(trace_id, span_id, body_text, attrs):
+        record = {
+            "timeUnixNano": str(now_ns()),
+            "severityNumber": 9,  # INFO
+            "severityText": "INFO",
+            "body": {"stringValue": body_text},
+            "attributes": attrs,
+            "traceId": trace_id,
+            "spanId": span_id,
+        }
+        post("/v1/logs", {
+            "resourceLogs": [{
+                "resource": {"attributes": resource_attrs()},
+                "scopeLogs": [{"logRecords": [record]}],
+            }]
+        })
+
+
+    def send_metric(role):
+        now = now_ns()
+        post("/v1/metrics", {
+            "resourceMetrics": [{
+                "resource": {"attributes": resource_attrs()},
+                "scopeMetrics": [{
+                    "metrics": [{
+                        "name": "synthetic_emitter_events_total",
+                        "sum": {
+                            "dataPoints": [{
+                                "attributes": [{"key": "role", "value": {"stringValue": role}}],
+                                "startTimeUnixNano": str(now - 1_000_000_000),
+                                "timeUnixNano": str(now),
+                                "asInt": "1",
+                            }],
+                            "aggregationTemporality": 2,  # CUMULATIVE
+                            "isMonotonic": True,
+                        },
+                    }]
+                }],
+            }]
+        })
+
+
+    def main():
+        trace_id = rand_hex(16)
+        producer_span_id = rand_hex(8)
+
+        # Convencoes publicas e estaveis de mensageria (D9, tarefa 8.2):
+        # sobrevivem a troca de transporte porque nao nomeiam a tecnologia.
+        base_attrs = [
+            {"key": "messaging.system", "value": {"stringValue": "synthetic"}},
+            {"key": "messaging.destination.name", "value": {"stringValue": "synthetic-queue"}},
+        ]
+
+        start = now_ns()
+        send_span(
+            trace_id, producer_span_id, None, "publish synthetic-queue",
+            base_attrs + [{"key": "messaging.operation", "value": {"stringValue": "publish"}}],
+            start, start + 1_000_000,
+        )
+        send_log(
+            trace_id, producer_span_id,
+            f"produtor publicou mensagem trace_id={trace_id}",
+            base_attrs,
+        )
+        send_metric("producer")
+
+        # Fronteira assincrona simulada: o consumidor roda depois de uma
+        # pausa real, como aconteceria atraves do outbox (tarefa 8.1).
+        time.sleep(2)
+
+        if PROPAGATE_CONTEXT:
+            consumer_trace_id = trace_id
+            parent_span_id = producer_span_id
+        else:
+            # Variante negativa (tarefa 8.4): novo trace_id, sem elo com o
+            # produtor -- prova que a AUSENCIA de propagacao aparece como
+            # rastro independente, nao como rastro continuo quebrado.
+            consumer_trace_id = rand_hex(16)
+            parent_span_id = None
+
+        consumer_span_id = rand_hex(8)
+        c_start = now_ns()
+        send_span(
+            consumer_trace_id, consumer_span_id, parent_span_id, "process synthetic-queue",
+            base_attrs + [{"key": "messaging.operation", "value": {"stringValue": "process"}}],
+            c_start, c_start + 1_000_000,
+        )
+        send_log(
+            consumer_trace_id, consumer_span_id,
+            f"consumidor processou mensagem trace_id={consumer_trace_id}",
+            base_attrs,
+        )
+        send_metric("consumer")
+
+        print(f"trace_id do produtor:  {trace_id}")
+        print(f"trace_id do consumidor: {consumer_trace_id}")
+        print(f"contexto propagado: {PROPAGATE_CONTEXT}")
+
+
+    if __name__ == "__main__":
+        main()

@@ -1,0 +1,62 @@
+# Mimir em modo monolitico (target "all", o padrao do binario sem flag
+# -target explicita): mesmo comportamento observavel do modo distribuido,
+# sem os componentes internos separados (D4 do design). O arquivo de
+# configuracao real (mimir-config, com o backend S3 e a janela de retencao)
+# vem da sobreposicao do ambiente (tarefas 4.1, 4.4).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mimir
+  labels:
+    app.kubernetes.io/name: mimir
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # evita duas instancias disputando o mesmo anel/TSDB local
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mimir
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mimir
+    spec:
+      containers:
+        - name: mimir
+          image: grafana/mimir:3.2.0
+          args:
+            - -config.file=/etc/mimir/mimir.yaml
+            - -config.expand-env=true # credenciais vem de env, nunca do arquivo (D4, D6 de plataforma-gitops)
+          envFrom:
+            - secretRef:
+                name: minio-creds-mimir
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: grpc
+              containerPort: 9095
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 20
+          volumeMounts:
+            - name: config
+              mountPath: /etc/mimir
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: mimir-config
+        - name: data
+          # TSDB local (dados recentes ainda nao enviados ao S3) e diretorios
+          # de trabalho do compactor/ruler/alertmanager. Mesma propriedade de
+          # dev ja registrada para o WAL do Tempo: perder isto num reinicio
+          # perde so o bloco em formacao, nao o ja compactado no S3.
+          emptyDir: {}

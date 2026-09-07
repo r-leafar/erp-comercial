@@ -1,0 +1,18 @@
+# Endereco interno consumido pelo Alloy (remote_write de metricas) e pelo
+# Grafana (fonte de dados compativel com a API do Prometheus, sob /prometheus).
+apiVersion: v1
+kind: Service
+metadata:
+  name: mimir
+  labels:
+    app.kubernetes.io/name: mimir
+spec:
+  selector:
+    app.kubernetes.io/name: mimir
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    - name: grpc
+      port: 9095
+      targetPort: grpc

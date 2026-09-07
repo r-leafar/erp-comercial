@@ -1,0 +1,18 @@
+# Endereco interno consumido pelo Alloy (log de pod, protocolo nativo do
+# Loki) e pelo Grafana (fonte de dados de logs, com correlacao para rastros).
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  labels:
+    app.kubernetes.io/name: loki
+spec:
+  selector:
+    app.kubernetes.io/name: loki
+  ports:
+    - name: http
+      port: 3100
+      targetPort: http
+    - name: grpc
+      port: 9096
+      targetPort: grpc

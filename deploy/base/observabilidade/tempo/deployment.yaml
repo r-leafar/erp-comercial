@@ -1,0 +1,74 @@
+# Tempo em modo monolitico (processo unico, target "all" -- o padrao do
+# binario sem flag -target): mesmo comportamento observavel do modo
+# distribuido, sem os processos internos separados (D4 do design). O
+# arquivo de configuracao (tempo-config, com o backend S3, credenciais via
+# variavel de ambiente e a janela de retencao) vive na sobreposicao do
+# ambiente -- essa parte MUDA entre dev e producao (tarefas 3.1, 3.4).
+#
+# VERSAO PRESA NA SERIE 2.x DE PROPOSITO (nao a mais recente). Confirmado
+# ao vivo: Tempo 3.0 remove o ingester/compactor classicos e passa a exigir
+# Kafka como caminho de ingestao (distributor escreve no Kafka; block-builder
+# e live-store consomem de la) -- dependencia nova e pesada, incompativel
+# com host unico e memoria compartilhada (D4, Risks/Trade-offs do design).
+# 2.10.8 e a ultima release da serie 2.x, mantendo o modo monolitico classico
+# usado abaixo.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tempo
+  labels:
+    app.kubernetes.io/name: tempo
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # evita duas instancias escrevendo o mesmo WAL local
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tempo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tempo
+    spec:
+      containers:
+        - name: tempo
+          image: grafana/tempo:2.10.8
+          args:
+            - -config.file=/etc/tempo/tempo.yaml
+            - -config.expand-env=true # credenciais vem de env, nunca do arquivo (D4, D6 de plataforma-gitops)
+          envFrom:
+            - secretRef:
+                name: minio-creds-tempo
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+            - name: http
+              containerPort: 3200
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 15
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tempo
+            - name: wal
+              mountPath: /var/tempo
+      volumes:
+        - name: config
+          configMap:
+            name: tempo-config
+        - name: wal
+          # Espaco de trabalho do WAL/blocos ainda nao fechados -- nao e o
+          # destino final (esse e o S3, via storage.trace.backend). Perder
+          # isto em um reinicio perde apenas o bloco em formacao, nao os ja
+          # compactados no S3; aceitavel no mesmo espirito de "propriedade
+          # de dev" ja registrado para o MinIO standalone.
+          emptyDir: {}

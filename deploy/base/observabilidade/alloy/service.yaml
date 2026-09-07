@@ -1,0 +1,24 @@
+# Endereco unico de ingestao (D1): emissores (aplicacao futura, emissor
+# sintetico desta change) enviam OTLP aqui, sem conhecer o armazenamento de
+# destino de cada sinal. http-ui expoe o grafo visual de componentes
+# (tarefa 1.4), acessivel por kubectl port-forward (mesmo padrao do
+# ArgoCD/MinIO em plataforma-gitops).
+apiVersion: v1
+kind: Service
+metadata:
+  name: alloy
+  labels:
+    app.kubernetes.io/name: alloy
+spec:
+  selector:
+    app.kubernetes.io/name: alloy
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+    - name: http-ui
+      port: 12345
+      targetPort: http-ui
