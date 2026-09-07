@@ -37,8 +37,13 @@ verificacao esta escrito junto quando nao e obvio.
       utilizavel para o trabalho normal.
 - [x] 2.4 Confirmar que a aplicacao, rodando no proprio host, alcanca banco,
       cache e armazenamento por endereco local.
-- [ ] 2.5 Confirmar que o cluster sobe sozinho apos reinicio do host, sem comando
+- [x] 2.5 Confirmar que o cluster sobe sozinho apos reinicio do host, sem comando
       manual.
+      Confirmado ao vivo: `wsl --shutdown` seguido de reabrir a distro. O
+      `k3s.service` ficou ativo automaticamente no momento do boot (systemd
+      enabled), e todos os pods voltaram `Running` sozinhos -- Application
+      voltou a `Healthy`, `ContinuousArchiving` continuou `True`. Nenhum
+      comando alem de reabrir o terminal.
 - [x] 2.6 Escrever o script `deploy/bootstrap/install-cluster.sh`, que cria o
       cluster k3s por sistema operacional, fixando a versao definida em 2.1.
       Verificacao: idempotente — executar duas vezes sem erro e sem recriar o
