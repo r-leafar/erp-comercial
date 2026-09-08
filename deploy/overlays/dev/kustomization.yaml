@@ -20,6 +20,7 @@ resources:
   - ../../base/observabilidade/mimir
   - ../../base/observabilidade/loki
   - ../../base/observabilidade/alloy
+  - ../../base/observabilidade/node-exporter
   - ../../base/observabilidade/grafana
   - ../../base/observabilidade/synthetic-emitter
   - tempo-config.yaml

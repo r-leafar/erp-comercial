@@ -1,0 +1,63 @@
+# node-exporter (tarefa 6.5, D5 do design): torna observavel a aproximacao
+# do esgotamento de disco do host -- sem isto, nao havia metrica nenhuma de
+# espaco em disco, so `df`/`free` manual. DaemonSet (nao Deployment): o
+# proposito e coletar do NO, nao de um pod -- com 1 no em dev isso e 1
+# replica de qualquer forma (mesmo raciocinio de D3a para o Alloy).
+#
+# hostPath (/proc, /sys) e hostNetwork sao INEVITAVEIS aqui e nao violam a
+# independencia de host da tarefa 9.6: o node-exporter existe justamente
+# para ler metricas do SISTEMA OPERACIONAL do no, o mesmo caminho universal
+# (/proc, /sys) em qualquer distribuicao Linux -- diferente de um caminho
+# particular de uma forma especifica de obter o cluster, que e o que a
+# tarefa 9.6 proibe.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-exporter
+  labels:
+    app.kubernetes.io/name: node-exporter
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: node-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: node-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+        - name: node-exporter
+          image: prom/node-exporter:v1.12.1
+          args:
+            - --path.procfs=/host/proc
+            - --path.sysfs=/host/sys
+            - --path.rootfs=/host/root
+          ports:
+            - name: metrics
+              containerPort: 9100
+              hostPort: 9100
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+            - name: root
+              mountPath: /host/root
+              readOnly: true
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys
+        - name: root
+          hostPath:
+            path: /

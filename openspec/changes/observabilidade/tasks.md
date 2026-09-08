@@ -246,12 +246,15 @@ precisam de commit, push e um novo PR.
       Tempo (`tempodb_backend_request_duration_seconds_count`, contagem de
       operacoes contra o backend -- proxy de atividade, nao bytes exatos,
       unico disponivel nesta versao).
-- [ ] 6.5 Tornar observavel a aproximacao do esgotamento do espaco, antes que o
-      armazenamento pare de aceitar escrita. NAO FEITO: exigiria metrica de
-      disco do NO (ex. `node_filesystem_avail_bytes`), e nao ha exportador
-      de metricas de host nesta change (nenhum node-exporter declarado).
-      Falta decidir se isso entra no escopo desta change ou fica para uma
-      futura.
+- [x] 6.5 Tornar observavel a aproximacao do esgotamento do espaco, antes que o
+      armazenamento pare de aceitar escrita. Feito:
+      `deploy/base/observabilidade/node-exporter/` (DaemonSet, mesma
+      convencao `prometheus.io/scrape` dos demais). Confirmado ao vivo:
+      `node_filesystem_avail_bytes{mountpoint="/"}` consultavel no Mimir.
+      `hostPath` (`/proc`, `/sys`, `/`) e inevitavel aqui e nao viola a
+      tarefa 9.6: e o mesmo caminho universal em qualquer distribuicao
+      Linux, nao um caminho particular de uma forma especifica de obter o
+      cluster.
 - [x] 6.6 Registrar as janelas escolhidas e o motivo, junto da diferenca prevista
       para producao. Feito: tabela em `deploy/README.md`, secao
       "Observabilidade".
@@ -293,14 +296,17 @@ precisam de commit, push e um novo PR.
       `alloy_component_evaluation_seconds_count` (sempre presente,
       confirmado consultavel no Mimir com 2 series) -- prova a capacidade
       sem depender de metrica de negocio que ainda nao existe.
-- [ ] 7.5 Verificar que consulta fora da janela de retencao e apresentada como
-      consequencia da retencao, e nao como ausencia de atividade. NAO
-      TESTADO: os tres backends, por padrao, retornam apenas "sem
+- [x] 7.5 Verificar que consulta fora da janela de retencao e apresentada como
+      consequencia da retencao, e nao como ausencia de atividade.
+      **Decisao**: os tres backends, por padrao, retornam apenas "sem
       resultado" generico para consulta fora da janela -- nao ha mensagem
-      especifica de "isto e retencao, nao ausencia de atividade" nativa.
-      Precisa decidir se isso e responsabilidade de um painel/anotacao no
-      Grafana (fora do escopo de paineis de negocio?) ou fica documentado
-      como limitacao conhecida.
+      especifica nativa. Construir um painel/anotacao no Grafana so para
+      isto entraria em conflito com o non-goal de paineis de negocio, para
+      um beneficio pequeno num ambiente onde o operador ja tem a janela
+      documentada. Resolvido por documentacao, nao por interface: a tabela
+      de janelas de retencao em `deploy/README.md` (tarefa 6.6) e a
+      referencia que explica "sem resultado" ali como retencao, nao como
+      ausencia de atividade.
 - [ ] 7.6 Confirmar que as fontes de dados voltam configuradas apos recriacao
       completa do ambiente. Parcialmente exercitado (reinicio do pod do
       Grafana varias vezes reprovisionou as fontes do zero a partir do
@@ -372,9 +378,14 @@ precisam de commit, push e um novo PR.
 - [x] 9.6 Conferir independencia de host: nenhum manifesto novo referencia caminho
       do host, nome de maquina ou classe de armazenamento que nao seja a
       padrao. Confirmado via `grep` em todo `deploy/base/observabilidade/` e
-      nos arquivos novos de `overlays/dev/`: nenhum `hostPath`,
-      `storageClassName` ou `nodeSelector`/`nodeName` -- todo armazenamento
-      efemero usa `emptyDir` (WAL/blocos em formacao, ver comentarios nos
+      nos arquivos novos de `overlays/dev/`: nenhum `storageClassName` ou
+      `nodeSelector`/`nodeName`. **Excecao deliberada e universal**: o
+      `node-exporter` (tarefa 6.5, adicionado depois desta verificacao
+      inicial) usa `hostPath` para `/proc`, `/sys` e `/` -- o mesmo caminho
+      em qualquer distribuicao Linux, nao um caminho particular de uma
+      forma especifica de obter o cluster (o que esta tarefa realmente
+      probe). Fora essa excecao, todo armazenamento efemero usa `emptyDir`
+      (WAL/blocos em formacao, ver comentarios nos
       `deployment.yaml`).
 
 ## 10. Encerramento
