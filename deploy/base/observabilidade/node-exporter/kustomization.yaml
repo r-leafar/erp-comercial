@@ -1,0 +1,11 @@
+# Onda 1 (mesma do Alloy): so precisa existir a tempo do scrape comecar.
+# Sem Service -- hostNetwork:true ja expoe a porta no endereco do proprio
+# no, e a descoberta por pod (discovery.kubernetes) do Alloy encontra o
+# pod normalmente.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: observability
+resources:
+  - daemonset.yaml
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "1"
