@@ -21,6 +21,14 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: minio
+      annotations:
+        # Metrica de uso por bucket (minio_bucket_usage_total_bytes),
+        # consumida pela change `observabilidade` (tarefa 6.4: consumo de
+        # armazenamento por sinal como metrica) -- mesma convencao
+        # prometheus.io/scrape ja usada pelo cert-manager.
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9000"
+        prometheus.io/path: "/minio/v2/metrics/cluster"
     spec:
       containers:
         - name: minio

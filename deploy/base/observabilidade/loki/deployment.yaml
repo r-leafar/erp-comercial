@@ -20,6 +20,12 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: loki
+      annotations:
+        # Metrica interna (loki_compactor_*) queryavel no proprio Mimir
+        # (tarefas 2.1, 6.2): torna observavel a AUSENCIA do processo de
+        # manutencao, nao so o crescimento do armazenamento.
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3100"
     spec:
       containers:
         - name: loki

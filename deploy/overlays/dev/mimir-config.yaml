@@ -56,8 +56,18 @@ data:
     alertmanager:
       data_dir: /data/alertmanager
 
+    # CONFIRMADO AO VIVO (tarefa 6.1): a retencao do Mimir e em DUAS fases --
+    # o bloco expirado (limits.compactor_blocks_retention_period, abaixo) e
+    # primeiro so MARCADO (deletion-mark.json), e a remocao FISICA dos
+    # arquivos so acontece apos compactor.deletion_delay. O padrao dessa
+    # segunda fase e 12h: com retencao de 2h, o dado so desapareceria de
+    # fato depois de 2h+12h=14h -- efetivamente sem limite pratico para um
+    # ambiente de dev que quer ver o disco estabilizar em minutos/horas, nao
+    # em dias. Reduzido para 1h (ainda maior que a retencao, dando folga
+    # para nao apagar um bloco que uma consulta em andamento ainda le).
     compactor:
       data_dir: /data/compactor
+      deletion_delay: 1h
 
     ruler:
       rule_path: /data/ruler

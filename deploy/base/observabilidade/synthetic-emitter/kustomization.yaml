@@ -1,0 +1,10 @@
+# Onda 1 (mesma do Alloy/Grafana): so precisa do endereco de ingestao no
+# ar. Suspenso por natureza (D8) -- nao ha ordem critica a proteger aqui.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: observability
+resources:
+  - script.yaml
+  - cronjob.yaml
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "1"

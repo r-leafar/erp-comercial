@@ -37,6 +37,49 @@ data:
       limit_percentage         = 75
       spike_limit_percentage   = 15
       output {
+        metrics = [otelcol.processor.transform.strip_forged_origin.input]
+        logs    = [otelcol.processor.transform.strip_forged_origin.input]
+        traces  = [otelcol.processor.transform.strip_forged_origin.input]
+      }
+    }
+
+    // Precedencia do atributo de origem (D2, tarefa 1.9): confirmado ao
+    // vivo que otelcol.processor.k8sattributes SO ACRESCENTA atributo
+    // ausente -- nao sobrescreve um k8s.* que o emissor ja tenha
+    // declarado (nao existe otelcol.processor.resource nesta distribuicao
+    // do Alloy; a remocao precisa da linguagem de transformacao OTTL).
+    // Removendo antes do enriquecimento, o k8sattributes sempre parte de
+    // um estado limpo e o valor derivado do ambiente sempre prevalece.
+    otelcol.processor.transform "strip_forged_origin" {
+      error_mode = "ignore"
+      trace_statements {
+        context    = "resource"
+        statements = [
+          `delete_key(attributes, "k8s.namespace.name")`,
+          `delete_key(attributes, "k8s.pod.name")`,
+          `delete_key(attributes, "k8s.pod.uid")`,
+          `delete_key(attributes, "k8s.node.name")`,
+        ]
+      }
+      metric_statements {
+        context    = "resource"
+        statements = [
+          `delete_key(attributes, "k8s.namespace.name")`,
+          `delete_key(attributes, "k8s.pod.name")`,
+          `delete_key(attributes, "k8s.pod.uid")`,
+          `delete_key(attributes, "k8s.node.name")`,
+        ]
+      }
+      log_statements {
+        context    = "resource"
+        statements = [
+          `delete_key(attributes, "k8s.namespace.name")`,
+          `delete_key(attributes, "k8s.pod.name")`,
+          `delete_key(attributes, "k8s.pod.uid")`,
+          `delete_key(attributes, "k8s.node.name")`,
+        ]
+      }
+      output {
         metrics = [otelcol.processor.k8sattributes.default.input]
         logs    = [otelcol.processor.k8sattributes.default.input]
         traces  = [otelcol.processor.k8sattributes.default.input]
@@ -45,8 +88,8 @@ data:
 
     // Enriquecimento com identidade de origem, derivado do ambiente de
     // execucao (D2, tarefa 1.5): associa o registro ao pod de origem pelo
-    // IP de conexao e sobrescreve qualquer atributo de origem que o
-    // emissor tenha declarado (tarefa 1.9 verifica essa precedencia).
+    // IP de conexao. O processor acima ja garantiu que nenhum k8s.* forjado
+    // sobrevive ate aqui (tarefa 1.9).
     otelcol.processor.k8sattributes "default" {
       extract {
         metadata = [
@@ -58,8 +101,37 @@ data:
       }
       output {
         metrics = [otelcol.processor.batch.default.input]
-        logs    = [otelcol.processor.batch.default.input]
+        logs    = [otelcol.processor.transform.loki_labels.input]
         traces  = [otelcol.processor.batch.default.input]
+      }
+    }
+
+    // Correlacao rastro->logs (D7, tarefa 7.2). CONFIRMADO AO VIVO: o log
+    // recebido por OTLP (emissor sintetico, futura aplicacao) NAO promove
+    // nenhum atributo a rotulo do Loki por padrao -- so o log coletado de
+    // pod (loki.source.kubernetes) tem namespace/pod como rotulo real,
+    // porque o discovery.relabel promove isso explicitamente. Sem rotulo,
+    // a navegacao "rastro -> logs" do Grafana (que filtra por rotulo) nao
+    // encontra nada. As dicas loki.resource.labels/loki.attribute.labels
+    // dizem ao exportador quais atributos promover a rotulo real desta
+    // remessa.
+    otelcol.processor.transform "loki_labels" {
+      error_mode = "ignore"
+      log_statements {
+        context    = "resource"
+        statements = [
+          `set(attributes["loki.resource.labels"], "k8s.namespace.name, k8s.pod.name")`,
+        ]
+      }
+      log_statements {
+        context    = "log"
+        statements = [
+          `set(attributes["trace_id"], trace_id.string) where trace_id.string != ""`,
+          `set(attributes["loki.attribute.labels"], "trace_id")`,
+        ]
+      }
+      output {
+        logs = [otelcol.processor.batch.default.input]
       }
     }
 

@@ -20,6 +20,12 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: mimir
+      annotations:
+        # Metrica interna (cortex_compactor_*) queryavel no proprio Mimir
+        # (tarefas 2.1, 6.2): torna observavel a AUSENCIA do processo de
+        # manutencao, nao so o crescimento do armazenamento.
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
     spec:
       containers:
         - name: mimir

@@ -17,13 +17,24 @@ data:
         url: http://tempo.observability.svc.cluster.local:3200
         jsonData:
           # Rastro continuo (tarefa 7.2): a partir de um rastro, navegar
-          # para os logs com o mesmo trace_id (D7, D9 -- otelcol.exporter.loki
-          # promove trace_id/span_id como metadado estruturado do Loki).
+          # para os logs com o mesmo trace_id. CONFIRMADO AO VIVO: o log
+          # recebido por OTLP so promove trace_id/k8s.* a rotulo real do
+          # Loki com uma dica explicita do Alloy
+          # (otelcol.processor.transform "loki_labels" -- ver alloy/config.yaml);
+          # sem ela, esses atributos ficam presos dentro do corpo JSON e a
+          # navegacao nao encontra nada. E o Loki SANITIZA nome de rotulo
+          # (ponto vira underscore): o atributo do rastro e "k8s.namespace.name",
+          # o rotulo do Loki e "k8s_namespace_name" -- por isso o mapeamento
+          # chave/valor abaixo, em vez de uma lista simples de nomes iguais.
           tracesToLogsV2:
             datasourceUid: loki
             filterByTraceID: true
             filterBySpanID: false
-            tags: ["namespace", "pod"]
+            tags:
+              - key: "k8s.namespace.name"
+                value: "k8s_namespace_name"
+              - key: "k8s.pod.name"
+                value: "k8s_pod_name"
           # Correlacao temporal com metricas (tarefa 7.4): metrica sempre
           # presente (contagem de series do proprio agente) no mesmo
           # periodo do rastro, prova a capacidade sem depender de uma

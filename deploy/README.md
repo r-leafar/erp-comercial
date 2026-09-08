@@ -40,6 +40,11 @@ hospeda.
 | MinIO Client (`mc`, job de buckets) | `RELEASE.2025-08-13T08-35-41Z` | `deploy/base/plataforma/minio-provision/buckets-job.yaml` |
 | Valkey | `8.1-alpine` | `deploy/base/plataforma/valkey/deployment.yaml` |
 | Podman | a que o gerenciador de pacotes da distro oferecer (sem pin reproduzivel — ver nota em `install-podman.sh`) | `deploy/bootstrap/install-podman.sh` |
+| Grafana Alloy | `v1.19.2` | `deploy/base/observabilidade/alloy/deployment.yaml` |
+| Grafana Tempo | `2.10.8` (presa na serie 2.x — 3.0 exige Kafka, ver nota no manifesto) | `deploy/base/observabilidade/tempo/deployment.yaml` |
+| Grafana Mimir | `3.2.0` | `deploy/base/observabilidade/mimir/deployment.yaml` |
+| Grafana Loki | `3.7.7` | `deploy/base/observabilidade/loki/deployment.yaml` |
+| Grafana | `13.2.1` | `deploy/base/observabilidade/grafana/deployment.yaml` |
 
 Atualizar aqui e no script/manifesto correspondente juntos quando houver
 motivo para subir de versao. Nenhum componente usa tag `latest` ou
@@ -419,6 +424,62 @@ genericidade. Com o backend em texto claro, qualquer Ingress padrao
 funciona sem anotacao nenhuma. So vale para dev; em producao a exposicao
 externa e outra decisao, fora do escopo desta change.
 
+## Observabilidade (change `observabilidade`)
+
+**Endereco de ingestao**, para a change `fundacao-aplicacao` (e para
+qualquer emissor) enviar rastros, metricas e logs:
+
+```
+http://alloy.observability.svc.cluster.local:4317   # OTLP gRPC
+http://alloy.observability.svc.cluster.local:4318   # OTLP HTTP
+```
+
+Quem emite nao precisa saber qual armazenamento recebe cada sinal (D1 do
+design) -- so o endereco acima e o protocolo OTLP.
+
+**Convencoes de atributo** que a aplicacao deve seguir, para que consultas e
+paineis sobrevivam a troca futura do sistema de mensageria (D9): use os
+nomes publicos e estaveis do OpenTelemetry para mensageria --
+`messaging.system`, `messaging.operation` (`publish`/`process`/`receive`),
+`messaging.destination.name` -- nunca um nome proprio da tecnologia de
+transporte atual. Referencia executavel:
+`deploy/base/observabilidade/synthetic-emitter/script.yaml`.
+
+**A configuracao do agente fica ATRAS da costura OTLP.** A aplicacao emite
+OTLP e nao sabe (nem precisa saber) o que recebe do outro lado. Isso
+significa que trocar o Grafana Alloy por outra distribuicao do
+OpenTelemetry Collector no futuro é uma mudanca confinada a
+`deploy/base/observabilidade/alloy/` -- nao alcanca a aplicacao, os
+armazenamentos (Tempo/Mimir/Loki so recebem OTLP/remote-write/push, sem
+saber quem os alimenta) nem as specs desta change (escritas em termos de
+comportamento observavel, sem nomear produto). O acoplamento real desta
+change ao ecossistema Grafana fica inteiramente do lado RECEPTOR da
+costura.
+
+**Fora do escopo, de proposito**: nenhuma instrumentacao de codigo de
+aplicacao, regra de alerta ou painel de negocio faz parte desta change --
+so o receptor. Ver `openspec/changes/observabilidade/proposal.md`,
+"Non-goals".
+
+**Janelas de retencao de dev** (tarefa 6.6), curtas de proposito para que a
+remocao efetiva seja verificavel em minutos, nao em dias -- propriedade de
+dev que NAO vale em producao (retencao real depende de volume e custo de
+armazenamento remoto, decisao adiada):
+
+| Sinal | Janela | Onde |
+|---|---|---|
+| Rastros (Tempo) | `block_retention: 2h` | `overlays/dev/tempo-config.yaml` |
+| Metricas (Mimir) | `compactor_blocks_retention_period: 2h` + `compactor.deletion_delay: 1h` | `overlays/dev/mimir-config.yaml` |
+| Logs (Loki) | `limits_config.retention_period: 2h` | `overlays/dev/loki-config.yaml` |
+
+**Nota de producao** (repetida do design, D8 do design de `observabilidade`
+e do proposal): processamento e armazenamento de objetos devem ficar
+proximos. Telemetria em armazenamento remoto degrada a consulta (cada
+consulta recupera muitos objetos) e pode gerar custo inesperado (a
+compactacao opera continuamente; provedores com cobranca minima de
+permanencia cobram meses por blocos que existem por horas). Decisao
+adiada para quando producao existir.
+
 ## Pendencias que esta change deixa em aberto
 
 - **Provedor de object storage de producao.** O overlay `prod` expressa o
@@ -430,3 +491,20 @@ externa e outra decisao, fora do escopo desta change.
   retencao minima. Backup frio (Postgres) em S3 remoto e tranquilo;
   telemetria quente nao. Revisitar quando producao existir e a change
   `observabilidade` ja estiver rodando havendo volume real de dados.
+- **Metrica de esgotamento de disco do host (tarefa 6.5 de
+  `observabilidade`).** Nao ha exportador de metricas de host (tipo
+  node-exporter) nesta change; sem ele, a aproximacao do esgotamento de
+  espaco em disco nao e observavel como metrica, so inferivel por
+  `df`/`free` manual. Decidir se entra no escopo desta change ou fica para
+  uma futura.
+- **Metrica de consumo por bucket do MinIO (tarefa 6.4 de
+  `observabilidade`).** O endpoint de metricas do MinIO
+  (`/minio/v2/metrics/cluster`) exige um token Bearer dedicado
+  (`mc admin prometheus generate`), diferente das credenciais por
+  consumidor ja usadas. Nao implementado para nao introduzir mais um
+  segredo so para isto -- cada backend (Tempo/Mimir/Loki) expoe sua PROPRIA
+  metrica de consumo nativa em vez disso (ver tarefa 6.4 em
+  `openspec/changes/observabilidade/tasks.md`).
+- **Destruir e recriar o ambiente do zero com a observabilidade no ar**
+  (tarefa 9.3 de `observabilidade`). Ainda nao exercitado nesta change --
+  todo o resto foi validado ao vivo contra um cluster ja existente.
