@@ -29,6 +29,13 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: tempo
+      annotations:
+        # Metrica interna (tempodb_compaction_*) queryavel no proprio
+        # Mimir, mesma convencao ja usada pelo cert-manager (tarefas 2.1,
+        # 6.2): torna observavel a AUSENCIA do processo de manutencao, nao
+        # so o crescimento do armazenamento.
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3200"
     spec:
       containers:
         - name: tempo

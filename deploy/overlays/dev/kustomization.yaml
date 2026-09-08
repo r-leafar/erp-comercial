@@ -21,6 +21,7 @@ resources:
   - ../../base/observabilidade/loki
   - ../../base/observabilidade/alloy
   - ../../base/observabilidade/grafana
+  - ../../base/observabilidade/synthetic-emitter
   - tempo-config.yaml
   - mimir-config.yaml
   - loki-config.yaml

@@ -1,0 +1,69 @@
+# Recurso de verificacao sob demanda (D8, tarefa 8.1): CronJob SUSPENSO --
+# nunca dispara sozinho (`schedule` so precisa ser sintaticamente valido,
+# irrelevante com suspend:true). O operador aciona manualmente quando quer
+# provar o caminho completo:
+#
+#   kubectl create job -n observability --from=cronjob/synthetic-emitter \
+#     synthetic-emitter-manual-$(date +%s)
+#
+# Um Job direto (nao-CronJob) exigiria apagar e recriar a cada execucao
+# (nome imutavel); o CronJob suspenso gera um Job novo com nome unico a
+# cada `create job --from=`, sem esse atrito.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: synthetic-emitter
+spec:
+  schedule: "0 0 1 1 *" # nunca dispara sozinho (suspend: true)
+  suspend: true
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: emit
+              image: python:3.13-slim
+              command: ["python3", "/scripts/emit.py"]
+              env:
+                - name: PROPAGATE_CONTEXT
+                  value: "true"
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+          volumes:
+            - name: script
+              configMap:
+                name: synthetic-emitter-script
+---
+# Variante negativa (tarefa 8.4): mesmo script, sem propagar contexto --
+# prova que a AUSENCIA de propagacao aparece como rastro independente na
+# consulta, e nao como rastro continuo quebrado.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: synthetic-emitter-negative
+spec:
+  schedule: "0 0 1 1 *"
+  suspend: true
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: emit
+              image: python:3.13-slim
+              command: ["python3", "/scripts/emit.py"]
+              env:
+                - name: PROPAGATE_CONTEXT
+                  value: "false"
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+          volumes:
+            - name: script
+              configMap:
+                name: synthetic-emitter-script

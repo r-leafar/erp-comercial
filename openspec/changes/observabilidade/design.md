@@ -100,6 +100,19 @@ Atributo de origem informado pelo emissor e configuracao, e configuracao erra:
 copia-se um valor de outro ambiente e a investigacao aponta para o lugar errado
 exatamente quando mais importa.
 
+**Implementacao real, confirmada ao vivo.** O processor
+`otelcol.processor.k8sattributes` do Alloy, na pratica, so ACRESCENTA um
+atributo `k8s.*` ausente -- ele NAO sobrescreve um valor que o emissor ja
+tenha declarado com o mesmo nome. Testado deliberadamente: um span com
+`k8s.namespace.name="namespace-forjado"` manteve o valor forjado intacto
+apos passar pelo processor. Isso violava a decisao D2 na pratica, nao so na
+teoria. Corrigido inserindo um processor de transformacao (OTTL,
+`otelcol.processor.transform`) que remove qualquer atributo `k8s.*` recebido
+ANTES do enriquecimento rodar -- garantindo que o k8sattributes sempre
+enriquece a partir de um estado limpo, e o valor derivado do ambiente
+sempre prevalece. Ver `deploy/base/observabilidade/alloy/config.yaml`,
+componente `strip_forged_origin`.
+
 ### D3. Grafana Alloy como agente unico de coleta; sem coletor de metricas autonomo
 
 **Decisao.** Um unico agente — Grafana Alloy — recebe os tres sinais por OTLP,
@@ -244,6 +257,23 @@ diagnostico mais caro.
 **Obrigacao derivada.** A ausencia do processo de manutencao precisa ser
 observavel por si mesma, e nao apenas inferida do crescimento do armazenamento.
 
+**Achado real, confirmado ao vivo: retencao em duas fases esconde uma
+segunda janela.** No Mimir, um bloco expirado (fora de
+`compactor_blocks_retention_period`) e primeiro so MARCADO para remocao
+(`deletion-mark.json` no bucket); a remocao FISICA dos arquivos so ocorre
+depois de `compactor.deletion_delay`, cujo padrao e **12 horas**. Com uma
+janela de retencao curta de dev (2h) e o padrao de 12h intocado, o dado so
+desapareceria de fato apos 14h -- exatamente o modo de falha que esta
+decisao pretende evitar, so que uma camada mais abaixo do que o texto
+original previa (aqui nao e o processo de manutencao que esta AUSENTE, e
+uma segunda janela, silenciosa, empilhada sobre a primeira). Corrigido
+declarando `compactor.deletion_delay: 1h` tambem no ambiente de dev (ver
+`deploy/overlays/dev/mimir-config.yaml`). Verificado ao vivo com um valor
+ainda mais curto (30s): o bloco marcado foi fisicamente removido do bucket
+poucos minutos depois. Confirmado o mesmo criterio (objeto some de fato,
+nao so marcado) para Tempo e Loki no mesmo teste, sem essa segunda janela
+escondida.
+
 ### D6. Compactacao e um custo de escrita, nao apenas de limpeza
 
 **Decisao.** A compactacao esta ativa para todo sinal que dela dependa, e seu
@@ -270,6 +300,22 @@ da telemetria cai a uma fracao: o custo foi pago e o beneficio, nao.
 **Dependencia para a change seguinte.** A verificacao de que o contexto atravessa
 a fronteira assincrona do outbox se faz aqui, olhando um rastro. Sem esta
 capacidade pronta, aquela decisao seria implementada sem forma de comprovacao.
+
+**Achado real, confirmado ao vivo: log recebido por OTLP nao carrega rotulo
+nenhum por padrao.** A navegacao "rastro -> logs" do Grafana filtra por
+ROTULO do Loki, nao por conteudo do corpo do log. O log de pod coletado
+via `loki.source.kubernetes` ja tem `namespace`/`pod` como rotulo real
+(promovido pelo `discovery.relabel`), mas o log recebido por OTLP (emissor
+sintetico hoje, aplicacao amanha) NAO promove nenhum atributo a rotulo --
+`trace_id` e `k8s.*` ficam presos dentro do corpo JSON, invisiveis para
+essa navegacao. Corrigido com um segundo processor de transformacao que
+seta as dicas `loki.resource.labels`/`loki.attribute.labels` lidas pelo
+exportador Loki do Alloy antes de exportar (ver componente `loki_labels`
+em `deploy/base/observabilidade/alloy/config.yaml`). Achado relacionado:
+o Loki sanitiza nome de rotulo (ponto vira underscore), entao
+`tracesToLogsV2.tags` no datasource do Tempo precisou de um mapeamento
+chave/valor explicito (`k8s.namespace.name` -> `k8s_namespace_name`), nao
+uma lista simples de nomes iguais.
 
 ### D8. Verificacao por emissor sintetico
 
