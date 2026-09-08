@@ -3,30 +3,22 @@
 Depende de `plataforma-gitops` concluida. Ordem sugerida; cada tarefa e
 verificavel isoladamente, com o criterio escrito junto quando nao e obvio.
 
-**Checkpoint de sessao (retome daqui):** 53/57 tarefas concluidas e
-validadas ao vivo (notas de verificacao junto de cada tarefa marcada
-`[x]`). Quatro bugs reais encontrados e corrigidos so por rodar contra o
-cluster nesta sessao (alem dos tres ja registrados na sessao anterior):
+**57/57 tarefas concluidas e validadas ao vivo** (notas de verificacao
+junto de cada tarefa marcada `[x]`). Seis bugs reais encontrados e
+corrigidos so por rodar contra o cluster ao longo da change:
 `k8sattributes` nao sobrescreve atributo de origem forjado (tarefa 1.9),
 log recebido por OTLP nao promove nada a rotulo do Loki sem uma dica
 explicita (tarefa 7.2), Mimir tem retencao em DUAS fases e o padrao da
-segunda fase (12h) inviabiliza uma janela curta de dev (tarefa 6.1), e
-Loki exige `compactor.delete_request_store` explicito com retencao ativa
-(ja corrigido na sessao anterior, reconfirmado nesta).
+segunda fase (12h) inviabiliza uma janela curta de dev (tarefa 6.1),
+Loki exige `compactor.delete_request_store` explicito com retencao ativa,
+Grafana faz sua propria expansao de `${VAR}` no provisionamento (tarefa
+7.1), e Tempo 3.0 exige Kafka como caminho de ingestao (presa em 2.10.8,
+tarefa 3.1). Fechada com uma destruicao e recriacao completa do cluster
+(tarefa 9.3) que por sua vez expos uma ultima lacuna real: o
+`node-exporter` (6.5) tinha sido aplicado ao vivo mas nunca commitado --
+corrigido e reconfirmado apos o merge, com o ArgoCD sincronizando sozinho.
 
-**Restam 4 tarefas, todas com o motivo de nao estarem prontas registrado
-junto da tarefa**: 6.5 (metrica de esgotamento de disco -- falta
-node-exporter), 7.5 (mensagem "isto e retencao" na consulta fora da
-janela), 7.6 e 9.3 (recriacao completa do cluster -- NAO exercitada nesta
-sessao, diferente do padrao rigoroso da change anterior; e o item de
-maior risco pendente, e resolveria 7.6 tambem).
-
-**Estado do cluster:** ArgoCD com sync automatico REATIVADO (foi
-desligado temporariamente durante a sessao para nao brigar com testes ao
-vivo -- `kubectl patch application plataforma-dev -n argocd` -- e
-restaurado ao final). PR #20 (checkpoint anterior) ja foi mergeado em
-`main` enquanto a sessao estava pausada; as correcoes desta sessao ainda
-precisam de commit, push e um novo PR.
+Change pronta para `openspec archive` quando o operador decidir.
 
 ## 1. Ponto de ingestao
 
@@ -307,11 +299,12 @@ precisam de commit, push e um novo PR.
       de janelas de retencao em `deploy/README.md` (tarefa 6.6) e a
       referencia que explica "sem resultado" ali como retencao, nao como
       ausencia de atividade.
-- [ ] 7.6 Confirmar que as fontes de dados voltam configuradas apos recriacao
-      completa do ambiente. Parcialmente exercitado (reinicio do pod do
-      Grafana varias vezes reprovisionou as fontes do zero a partir do
-      ConfigMap, sempre com sucesso), mas NAO com uma recriacao completa do
-      cluster (essa e a tarefa 9.3, tambem nao feita ainda).
+- [x] 7.6 Confirmar que as fontes de dados voltam configuradas apos recriacao
+      completa do ambiente. **Confirmado ao vivo com destruicao e
+      recriacao completa do cluster** (ver tarefa 9.3): as tres fontes
+      (Tempo, Mimir, Loki) reapareceram via `/api/datasources` com a
+      correlacao (`tracesToLogsV2`/`derivedFields`/`httpMethod`) intacta,
+      sem nenhuma intervencao manual alem do bootstrap padrao.
 
 ## 8. Emissor sintetico e criterio de pronto
 
@@ -360,10 +353,21 @@ precisam de commit, push e um novo PR.
       `target: all` (monolitico); Alloy 1 Deployment, 1 replica (D3a);
       Grafana 1 Deployment, 1 replica. Diferenca de producao documentada em
       comentario em cada `kustomization.yaml`/`deployment.yaml`.
-- [ ] 9.3 Destruir o ambiente e recria-lo do zero, confirmando que a
-      observabilidade volta completa e configurada sem intervencao. NAO
-      FEITO ainda -- pendente para a proxima sessao (ver checkpoint no topo
-      deste arquivo).
+- [x] 9.3 Destruir o ambiente e recria-lo do zero, confirmando que a
+      observabilidade volta completa e configurada sem intervencao.
+      **Confirmado ao vivo**: `destroy-cluster.sh` + `bootstrap.sh`
+      rodados pelo usuario; cluster k3s novo, ArgoCD reconciliou a
+      plataforma inteira em ordem (cert-manager -> cnpg/sealed-secrets ->
+      valkey/minio -> buckets -> tempo/mimir/loki/postgres -> grafana/alloy),
+      sem nenhum erro de dependencia. Emissor sintetico re-executado no
+      cluster novo: enriquecimento e rastro continuo identicos ao
+      comportamento anterior. **Achado real durante o proprio teste**: o
+      `node-exporter` (tarefa 6.5) tinha sido aplicado ao vivo na sessao
+      anterior mas nunca commitado -- o cluster recriado NAO o trouxe de
+      volta, expondo a lacuna. Corrigido com um commit dedicado (PR #22);
+      apos o merge, o ArgoCD sincronizou automaticamente (`selfHeal`, sem
+      nenhum `kubectl apply` manual) e `node_filesystem_avail_bytes`
+      voltou a ficar consultavel.
 - [x] 9.4 Conferir a ordenacao: nenhum armazenamento de telemetria iniciou antes
       de seu repositorio de objetos existir. Confirmado por construcao (onda
       -1 do minio-provision antes da onda 0 de Tempo/Mimir/Loki) e por
