@@ -39,8 +39,9 @@ de "réplicas do Postgres" quando só existe uma instância).
 **Decisão.** Importar o painel oficial do node-exporter (ID 1860,
 grafana.com) para saúde de host, e o painel oficial do CNPG (ID 20417,
 `github.com/cloudnative-pg/grafana-dashboards`) para saúde do Postgres.
-Construir um painel próprio, pequeno, para saúde de pod/workload
-(kube-state-metrics).
+Construir um painel próprio para saúde de pod/workload, combinando estado
+declarado (`kube-state-metrics`) e consumo real (`cAdvisor`, D5) no mesmo
+painel.
 
 **Por que os dois primeiros são seguros para importar.** Ambos são mantidos
 pelo mesmo projeto que produz o exporter que os alimenta (node-exporter e
@@ -51,19 +52,20 @@ dentro do dashboard pode ficar vazio se uma métrica opcional não estiver
 habilitada; aceitável, não é falha, é ruído visual (ver "Risco assumido e
 registrado" na proposta).
 
-**Por que o terceiro não é importado.** Painéis comunitários de
-"Kubernetes cluster health" (os populares do ecossistema
-kube-prometheus-stack) pressupõem `cAdvisor` além de `kube-state-metrics`,
-e assumem convenções de rótulo (`cluster`, `node` multi-valor) que fazem
-sentido num cluster de produção com vários nós -- aqui teriam múltiplos
-painéis vazios ou com um único valor sempre repetido. Um painel pequeno,
-só com o que este ambiente realmente expõe (reinícios, réplicas
-esperadas/prontas, fase do pod), é mais direto de manter e não mente sobre
-capacidade que não existe.
+**Por que o terceiro não é importado, mesmo com cAdvisor agora no escopo.**
+Painéis comunitários de "Kubernetes cluster health" (os populares do
+ecossistema kube-prometheus-stack) assumem convenções de rótulo (`cluster`,
+`node` multi-valor, `namespace` como filtro de topo) pensadas para um
+cluster de produção com vários nós -- aqui teriam variáveis de filtro com
+um único valor sempre repetido, e painéis pensados para comparar N nós
+mostrando sempre o mesmo no. Ter cAdvisor disponível resolve a fonte de
+dado que faltava, não o descompasso de forma -- um painel pequeno, com as
+variáveis certas para um cluster de um nó, continua mais direto de manter.
 
 **Alternativa recusada.** Importar um dashboard grande de
-kube-prometheus-stack e aceitar os painéis vazios. Rejeitada: o objetivo
-declarado ("ver rápido se algo está ruim") piora com ruído, não melhora.
+kube-prometheus-stack e aceitar os painéis com variável de filtro
+redundante. Rejeitada: o objetivo declarado ("ver rápido se algo está
+ruim") piora com ruído, não melhora.
 
 ### D2. `kube-state-metrics` como componente novo, mesmo padrão de scrape já estabelecido
 
@@ -108,6 +110,36 @@ dinamicamente via API do Grafana). Rejeitada: adiciona um processo e uma
 superfície de RBAC novos só para reproduzir o que o mecanismo de
 provisionamento por arquivo, já em uso, já faz.
 
+### D5. cAdvisor raspado via descoberta de nó, nao pela convencao de anotacao
+
+**Decisao.** Diferente de todo alvo de scrape ja existente
+(cert-manager/Tempo/Mimir/Loki/node-exporter/kube-state-metrics, todos via
+`discovery.kubernetes` com `role: pod` + filtro por anotacao
+`prometheus.io/scrape`), o cAdvisor exige um mecanismo proprio: ele nao e
+um pod que se descobre normalmente, e sim um endpoint embutido no proprio
+kubelet, exposto em `https://<endereco-do-no>:10250/metrics/cadvisor`.
+Usar `discovery.kubernetes` com `role: node` (um alvo por NO, nao por pod)
+e um `prometheus.scrape` apontando para esse caminho, com
+`bearer_token_file` (o token do proprio ServiceAccount do Alloy, montado
+por padrao em todo pod) e `tls_config.insecure_skip_verify: true` (o
+certificado do kubelet nao e assinado por uma CA que o Alloy reconheca por
+padrao).
+
+**RBAC adicional, o unico desta change que nao e so leitura de objeto.**
+O ClusterRole do Alloy (ja existente, de `observabilidade`) precisa de mais
+duas entradas: `resources: ["nodes/metrics", "nodes/proxy"]`, `verbs:
+["get"]` -- autorizacao para o token do Alloy chamar a API do kubelet, nao
+so listar objetos do apiserver. Mesma superficie que qualquer instalacao
+padrao de kube-prometheus-stack pede para o mesmo fim.
+
+**Por que nao e so mais uma anotacao.** As outras fontes desta change
+(kube-state-metrics, exporter do Postgres) reaproveitam 100% o mecanismo
+que `observabilidade` ja construiu -- descoberta por pod, filtro por
+anotacao, sem RBAC novo. O cAdvisor e o unico caso desta change com um
+caminho de coleta genuinamente novo (por no, autenticado contra o
+kubelet), e fica registrado como tal para nao passar a impressao de que
+"e so mais um scrape igual aos outros".
+
 ## Risks / Trade-offs
 
 | Risco | Impacto | Mitigação |
@@ -115,6 +147,8 @@ provisionamento por arquivo, já em uso, já faz.
 | Painel importado com campo vazio por métrica opcional ausente | Ruído visual, não falha funcional | Documentado por painel na tarefa de importação; confirmado ao vivo antes de fechar a tarefa |
 | `kube-state-metrics` some do escopo de RBAC em uma versão futura do Kubernetes | Painel de saúde de pod para de atualizar | Mesmo risco de qualquer instalação padrão; não específico desta change |
 | Editar `cluster.yaml` de uma change já arquivada | Acoplamento entre changes | Edição mínima (metadata), sem mudança de requisito; mesmo padrão já aceito em `observabilidade` (anotações no MinIO de `plataforma-gitops`) |
+| Certificado do kubelet não confiável por padrão, exigindo `insecure_skip_verify` | Canal de scrape sem verificação de identidade do servidor | Mesmo risco aceito por qualquer instalação padrão de kube-prometheus-stack contra o kubelet; tráfego interno ao cluster, não exposto externamente |
+| RBAC do Alloy ganha permissão de leitura contra a API do kubelet (`nodes/metrics`, `nodes/proxy`), não só contra o apiserver | Superfície de permissão maior que a de qualquer alvo anterior desta plataforma | Somente leitura (`get`), sem escrita; registrado explicitamente em D5 para não passar despercebido |
 
 ## Migration Plan
 

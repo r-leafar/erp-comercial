@@ -8,9 +8,9 @@ negócio. Isso deixou uma lacuna diferente, que não depende da aplicação
 existir: hoje não há como olhar a saúde operacional da própria plataforma
 (cluster, pods, Postgres) sem escrever consulta PromQL/LogQL manual a cada
 vez. As métricas em boa parte já existem (node-exporter, scrape de infra);
-falta o painel que as torna consultáveis de relance, e faltam duas fontes
-específicas (estado de objeto do Kubernetes, e o exporter que o Postgres já
-expõe mas não é raspado).
+falta o painel que as torna consultáveis de relance, e faltam três fontes
+específicas: estado de objeto do Kubernetes, consumo real por contêiner, e
+o exporter que o Postgres já expõe mas não é raspado.
 
 ## What Changes
 
@@ -18,6 +18,11 @@ expõe mas não é raspado).
   hoje não há como ver, como métrica, se um pod está reiniciando em loop, um
   Deployment está com réplicas incompletas, etc. -- só é possível inspecionar
   via `kubectl describe`.
+- **Métrica de consumo real por contêiner** (`cAdvisor`, embutido no
+  kubelet): hoje não há como ver quanto CPU/memória um contêiner está
+  efetivamente usando -- só o que foi pedido/limitado, nunca o uso real.
+  Complementa o `kube-state-metrics` (que só dá o estado declarado): um
+  responde "está saudável?", o outro "está consumindo muito?".
 - **Raspagem do exporter do Postgres**: o CNPG já expõe um exporter
   Prometheus embutido (porta 9187) em cada pod do Cluster, mas ele não tem a
   anotação `prometheus.io/scrape` que o Alloy usa para descoberta -- o dado
@@ -28,9 +33,9 @@ expõe mas não é raspado).
     existente.
   - Saúde do Postgres -- painel oficial do próprio projeto CNPG, mantido
     para o exato conjunto de métricas que ele expõe.
-  - Saúde de pod/workload (reinícios, réplicas, pods presos) -- construído
-    sob medida para este ambiente (D1 do design explica por quê, não um
-    painel comunitário genérico).
+  - Saúde de pod/workload, com estado (`kube-state-metrics`) e consumo real
+    (`cAdvisor`) lado a lado -- construído sob medida para este ambiente
+    (D1 do design explica por quê, não um painel comunitário genérico).
 
 ### Non-goals
 
@@ -40,10 +45,6 @@ expõe mas não é raspado).
   mostra estado; uma regra de alerta decide quando isso vira ação -- decisão
   adiada para quando houver sinal real de produção.
 - **Objetivos de nível de serviço.** Mesma razão.
-- **cAdvisor / métrica de uso real por contêiner.** Complementaria o
-  `kube-state-metrics` (que só dá o estado declarado, não o consumo real),
-  mas exige raspagem via API do kubelet, um mecanismo diferente do usado
-  hoje. Registrado como opção futura, não como escopo.
 
 ## Capabilities
 
@@ -71,6 +72,11 @@ provisionada, e o Alloy com o mecanismo de descoberta por anotação
 **Novo no repositório**
 
 - `deploy/base/observabilidade/kube-state-metrics/` (componente novo).
+- Raspagem do cAdvisor embutido no kubelet, via novo alvo de descoberta no
+  Alloy (`discovery.kubernetes` com `role: node`) e RBAC adicional
+  (`nodes/metrics`, `nodes/proxy`) -- o único mecanismo de coleta
+  genuinamente novo desta change; os demais reaproveitam o scrape por
+  anotação já estabelecido em `observabilidade` (ver D5 do design).
 - Anotação `prometheus.io/scrape` no Postgres via
   `spec.inheritedMetadata.annotations` do `Cluster` do CNPG (mecanismo
   documentado do próprio CNPG para propagar anotação a todos os pods
