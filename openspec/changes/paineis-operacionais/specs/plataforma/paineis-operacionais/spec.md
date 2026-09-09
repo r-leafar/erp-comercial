@@ -50,6 +50,24 @@ estado de objeto do Kubernetes, não de inspeção manual.
 - **WHEN** um workload tem menos réplicas prontas do que declaradas
 - **THEN** essa divergência aparece no painel
 
+### Requirement: Consumo real por contêiner visível
+
+Um painel SHALL exibir o consumo real de CPU e memória de cada contêiner,
+derivado de métrica de uso efetivo (não de valor pedido ou limitado),
+lado a lado com o estado declarado do mesmo pod.
+
+#### Scenario: Consumo real distinto do valor pedido
+
+- **WHEN** um contêiner consome CPU ou memória de forma diferente do que
+  foi pedido/limitado em seu manifesto
+- **THEN** o painel mostra o valor real consumido, não o valor declarado
+
+#### Scenario: Consumo real e estado declarado no mesmo painel
+
+- **WHEN** o painel de saúde de pod/workload é aberto
+- **THEN** o consumo real por contêiner aparece ao lado do estado
+  declarado do mesmo pod (reinícios, fase), sem precisar trocar de painel
+
 ### Requirement: Saúde do Postgres visível
 
 Um painel SHALL exibir o estado operacional do cluster Postgres (conexões,
