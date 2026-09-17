@@ -522,6 +522,27 @@ Corrigido com um `prometheus.scrape` dedicado para ele
 exporter que descreva OUTROS objetos (nao a si mesmo) precisa do mesmo
 tratamento, nao do job "infra" padrao.
 
+**Gotcha operacional confirmado ao vivo: nunca mexer manualmente no
+finalizer de um Job de hook do ArgoCD.** Durante a investigacao ao vivo do
+bug do MinIO (ver "Versoes fixadas" e nota abaixo), um Job travado em
+`Terminating` foi desbloqueado removendo `metadata.finalizers` na mao.
+Isso deixou o ArgoCD com o rastreamento da propria operacao de sync
+confuso: toda sincronizacao automatica seguinte ficava presa em
+`"waiting for completion of hook batch/Job/<nome>"`, recriando o Job com o
+conteudo de uma revisao ANTERIOR do git (nao a mais recente), repetidamente
+-- mesmo com `automated.selfHeal` ligado. **Se isso acontecer**: garanta
+que o Job em questao ja esta `Completed` com o manifesto correto (via
+`kubectl apply` direto, se preciso) e SO ENTAO dispare uma sincronizacao
+manual explicita para a revisao certa:
+
+```bash
+kubectl patch application plataforma-dev -n argocd --type merge -p \
+  '{"operation":{"sync":{"revision":"<sha-do-commit>"}}}'
+```
+
+Disparar a sincronizacao ANTES do Job estar `Completed` reproduz o mesmo
+travamento.
+
 ## Pendencias que esta change deixa em aberto
 
 - **Provedor de object storage de producao.** O overlay `prod` expressa o
