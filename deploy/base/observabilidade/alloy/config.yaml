@@ -199,6 +199,22 @@ data:
         regex         = "true"
         action        = "keep"
       }
+      // CONFIRMADO AO VIVO (tarefa 6.2 de paineis-operacionais): sem esta
+      // exclusao, o kube-state-metrics cai neste job -- e o target_label
+      // "pod"/"namespace" abaixo SOBRESCREVE (honor_labels=false, o
+      // padrao) o proprio rotulo "pod"/"namespace" que cada metrica do
+      // kube-state-metrics ja carrega DESCREVENDO O OBJETO OBSERVADO
+      // (ex.: pod="restart-test"), substituindo-o pela identidade do
+      // PROPRIO EXPORTER (pod="kube-state-metrics-...") em toda serie,
+      // silenciosamente. O rotulo real sobrevive renomeado para
+      // "exported_pod"/"exported_namespace", nao para onde os paineis
+      // olham. Kube-state-metrics tem scrape proprio abaixo, com
+      // honor_labels=true.
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+        regex         = "kube-state-metrics"
+        action        = "drop"
+      }
       rule {
         source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_path"]
         regex         = "(.+)"
@@ -223,6 +239,33 @@ data:
     prometheus.scrape "infra" {
       targets    = discovery.relabel.scrape_annotated.output
       forward_to = [prometheus.remote_write.mimir.receiver]
+    }
+
+    // kube-state-metrics tem scrape PROPRIO, separado do job "infra"
+    // acima (tarefa 6.2): suas metricas descrevem OUTROS objetos do
+    // cluster e ja carregam "pod"/"namespace" corretos por si mesmas --
+    // honor_labels=true preserva esses rotulos originais em vez de
+    // deixar o rotulo do PROPRIO alvo (o exporter) sobrescreve-los.
+    discovery.relabel "kube_state_metrics" {
+      targets = discovery.kubernetes.pods.targets
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+        regex         = "kube-state-metrics"
+        action        = "keep"
+      }
+      rule {
+        source_labels = ["__address__", "__meta_kubernetes_pod_annotation_prometheus_io_port"]
+        regex         = "([^:]+)(?::\\d+)?;(\\d+)"
+        replacement   = "$1:$2"
+        target_label  = "__address__"
+      }
+    }
+
+    prometheus.scrape "kube_state_metrics" {
+      targets       = discovery.relabel.kube_state_metrics.output
+      honor_labels  = true
+      forward_to    = [prometheus.remote_write.mimir.receiver]
     }
 
     // O proprio agente tambem e um componente de infraestrutura: sua
@@ -256,4 +299,43 @@ data:
     loki.source.kubernetes "pods" {
       targets    = discovery.relabel.pods_for_logs.output
       forward_to = [loki.write.default.receiver]
+    }
+
+    // Consumo real por contêiner (cAdvisor, D5 do design de
+    // paineis-operacionais): DIFERENTE de todo alvo acima, que se
+    // descobre por pod + anotacao. O cAdvisor nao e um pod, e um endpoint
+    // embutido no proprio kubelet -- por isso a descoberta e por NO
+    // (role: node), nao por pod, e o endereco default do role node ja
+    // vem como <ip-do-no>:10250 (porta do kubelet); so falta apontar o
+    // caminho para /metrics/cadvisor.
+    discovery.kubernetes "nodes" {
+      role = "node"
+    }
+
+    discovery.relabel "nodes_for_cadvisor" {
+      targets = discovery.kubernetes.nodes.targets
+
+      rule {
+        target_label = "__metrics_path__"
+        replacement  = "/metrics/cadvisor"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_node_name"]
+        target_label  = "node"
+      }
+    }
+
+    // Autorizacao contra a API do kubelet (nao o apiserver): o token do
+    // proprio ServiceAccount do Alloy, montado por padrao em todo pod.
+    // O certificado do kubelet nao e assinado por uma CA que o Alloy
+    // reconheca por padrao -- por isso insecure_skip_verify. RBAC
+    // correspondente (nodes/metrics, nodes/proxy) em rbac.yaml.
+    prometheus.scrape "cadvisor" {
+      targets         = discovery.relabel.nodes_for_cadvisor.output
+      scheme          = "https"
+      bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+      tls_config {
+        insecure_skip_verify = true
+      }
+      forward_to = [prometheus.remote_write.mimir.receiver]
     }

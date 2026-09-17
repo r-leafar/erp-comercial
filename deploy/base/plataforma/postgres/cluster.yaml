@@ -17,6 +17,16 @@ metadata:
   namespace: data
 spec:
   instances: 1 # dev e single-node por decisao (proposal.md, non-goals)
+  # Anotacao propagada a TODO pod gerado pelo Cluster (mecanismo do
+  # proprio CNPG). O exporter Prometheus embutido do CNPG (porta 9187) ja
+  # existe em cada pod desde sempre; sem esta anotacao ele fica invisivel
+  # para o Alloy, que descobre alvos de scrape por ela (mesma convencao
+  # de cert-manager/Tempo/Mimir/Loki -- change `paineis-operacionais`,
+  # tarefa 3.1, D3 do design).
+  inheritedMetadata:
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9187"
   storage:
     size: 10Gi
   bootstrap:

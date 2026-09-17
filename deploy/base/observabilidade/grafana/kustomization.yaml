@@ -6,7 +6,22 @@ kind: Kustomization
 namespace: observability
 resources:
   - datasources.yaml
+  - dashboards-provider.yaml
   - deployment.yaml
   - service.yaml
+configMapGenerator:
+  # Paineis importados (node-exporter ID 1860, CNPG ID 20417 -- D1 do
+  # design de paineis-operacionais), vendorizados como arquivo em vez de
+  # digitados a mao: gerado a partir do arquivo, nao de literal embutido,
+  # porque sao grandes e vem de fonte externa. Sufixo de hash (padrao do
+  # configMapGenerator) e o comportamento certo aqui -- diferente dos
+  # demais ConfigMaps desta plataforma (mantidos por nos, atualizados via
+  # kubectl apply manual), estes so mudam quando o arquivo vendorizado e
+  # atualizado, e o hash forca o rollout nesse caso.
+  - name: grafana-dashboards
+    files:
+      - dashboards/node-exporter-full.json
+      - dashboards/cnpg-cluster.json
+      - dashboards/pod-workload-health.json
 commonAnnotations:
   argocd.argoproj.io/sync-wave: "1"

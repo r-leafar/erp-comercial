@@ -1,0 +1,10 @@
+# Onda 1 (mesma do Alloy/node-exporter): so precisa existir a tempo do
+# scrape comecar.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: observability
+resources:
+  - rbac.yaml
+  - deployment.yaml
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "1"
