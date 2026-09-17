@@ -2,6 +2,18 @@
 # depois do MinIO existir (onda -2) e antes de consumidores que dependem
 # dos buckets (onda 0 em diante) -- Loki/Tempo/Mimir NAO criam bucket
 # sozinhos e falhariam sem ele.
+#
+# CONFIRMADO AO VIVO (2026-09-16, durante recriacao completa do cluster
+# para a tarefa 7.2 de paineis-operacionais): o Docker Hub REMOVEU
+# minio/minio e minio/mc por completo em 2026-09-11 -- a MinIO parou de
+# publicar binarios/imagens pre-compilados gratuitos da edicao community
+# em outubro de 2025 (source-only desde entao para quem nao paga
+# enterprise), e as imagens antigas ficaram no ar, mas estaticas, por
+# cerca de onze meses antes de serem removidas de vez. O MESMO tag e
+# digest continuam publicados em quay.io/minio/ (o servidor MinIO em
+# deploy/base/plataforma/minio/deployment.yaml ja usava quay.io desde o
+# inicio; so o cliente mc desta imagem ainda apontava para o Docker Hub).
+# Troca de registro apenas -- mesma versao, mesmo conteudo.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -20,7 +32,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: provision
-          image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+          image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
           command: ["/bin/sh", "/scripts/provision.sh"]
           envFrom:
             - secretRef:
