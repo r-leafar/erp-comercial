@@ -352,7 +352,7 @@ spec:
 recusado**, nunca aplicado silenciosamente: o job de recuperacao falha com
 `"no target backup found"` e o Cluster nunca fica `Ready`.
 
-## Acessando os paineis (ArgoCD, MinIO)
+## Acessando os paineis (ArgoCD, MinIO, Grafana)
 
 **Se voce esta no Windows com WSL2, o navegador so funciona com
 `kubectl port-forward`. O `Ingress`/`nip.io` desta secao NAO abre no seu
@@ -361,10 +361,12 @@ navegador — nao pule esta frase.**
 ```bash
 kubectl port-forward svc/argocd-server -n argocd 8080:80
 kubectl port-forward svc/minio -n storage 9001:9001
+kubectl port-forward svc/grafana -n observability 3000:3000
 ```
 
-Depois, abra `http://localhost:8080` (ArgoCD) e `http://localhost:9001`
-(MinIO) no navegador do Windows normalmente.
+Depois, abra `http://localhost:8080` (ArgoCD), `http://localhost:9001`
+(MinIO) e `http://localhost:3000` (Grafana) no navegador do Windows
+normalmente.
 
 **Credenciais de login:**
 
@@ -375,6 +377,10 @@ kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.pas
 # MinIO -- usuario e senha
 kubectl get secret minio-credentials -n storage -o jsonpath='{.data.MINIO_ROOT_USER}' | base64 -d; echo
 kubectl get secret minio-credentials -n storage -o jsonpath='{.data.MINIO_ROOT_PASSWORD}' | base64 -d; echo
+
+# Grafana -- usuario e senha
+kubectl get secret grafana-credentials -n observability -o jsonpath='{.data.GF_SECURITY_ADMIN_USER}' | base64 -d; echo
+kubectl get secret grafana-credentials -n observability -o jsonpath='{.data.GF_SECURITY_ADMIN_PASSWORD}' | base64 -d; echo
 ```
 
 ### Por que existe um Ingress, se o navegador do Windows nao usa
@@ -479,6 +485,42 @@ consulta recupera muitos objetos) e pode gerar custo inesperado (a
 compactacao opera continuamente; provedores com cobranca minima de
 permanencia cobram meses por blocos que existem por horas). Decisao
 adiada para quando producao existir.
+
+## Paineis operacionais (change `paineis-operacionais`)
+
+Tres paineis de saude operacional, provisionados declarativamente no
+Grafana (mesmo mecanismo de `datasources.yaml`, sem clique manual):
+
+| Painel | Origem | Fonte de dado |
+|---|---|---|
+| Node Exporter Full | Importado (ID 1860, grafana.com, revisao 45) | `node-exporter` |
+| CloudNativePG | Importado (ID 20417, `cloudnative-pg/grafana-dashboards`) | exporter embutido do CNPG (porta 9187, anotado via `inheritedMetadata` no `Cluster`) |
+| Saude de Pod/Workload | Construido sob medida (D1 do design: paineis comunitarios de "Kubernetes cluster health" pressupoem varios nos, mostrando variavel de filtro redundante aqui) | `kube-state-metrics` (estado declarado) + cAdvisor (consumo real) |
+
+Acesso: `kubectl port-forward svc/grafana -n observability 3000:3000` (ver
+"Acessando os paineis" acima) -- os tres aparecem na busca de dashboards
+do Grafana assim que o bootstrap termina.
+
+**RBAC do Alloy contra a API do kubelet.** cAdvisor nao e um pod que se
+descobre normalmente -- e um endpoint embutido no proprio kubelet
+(`https://<no>:10250/metrics/cadvisor`). O `ClusterRole` do Alloy
+(`deploy/base/observabilidade/alloy/rbac.yaml`) ganhou `get` em
+`nodes/metrics` e `nodes/proxy` so para isto -- unica excecao ao padrao
+"so scrape por anotacao de pod" desta plataforma (D5 do design).
+
+**Gotcha confirmado ao vivo: `honor_labels` com kube-state-metrics.** O
+job de scrape por anotacao compartilhado (`prometheus.scrape "infra"`,
+usado por cert-manager/Tempo/Mimir/Loki/node-exporter/Postgres) sobrescreve
+os rotulos `pod`/`namespace` da metrica com a identidade de QUEM a expos --
+comportamento certo para esses alvos, que nao tem rotulo `pod`/`namespace`
+proprio. `kube-state-metrics` e o oposto: cada metrica sua ja descreve
+OUTRO objeto do cluster com esses mesmos nomes de rotulo. Sem tratamento
+especial, toda metrica aparecia atribuida ao proprio pod do
+kube-state-metrics, nunca ao pod real -- silenciosamente, sem erro.
+Corrigido com um `prometheus.scrape` dedicado para ele
+(`honor_labels = true`), separado do job compartilhado. Qualquer novo
+exporter que descreva OUTROS objetos (nao a si mesmo) precisa do mesmo
+tratamento, nao do job "infra" padrao.
 
 ## Pendencias que esta change deixa em aberto
 

@@ -22,6 +22,12 @@ rules:
   - apiGroups: ["apps"]
     resources: ["replicasets"]
     verbs: ["get", "list", "watch"]
+  # cAdvisor (D5 de paineis-operacionais): autorizacao para chamar a API
+  # do kubelet, nao so listar objetos do apiserver -- unica excecao ao
+  # padrao "so leitura de objeto" desta plataforma.
+  - apiGroups: [""]
+    resources: ["nodes/metrics", "nodes/proxy"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

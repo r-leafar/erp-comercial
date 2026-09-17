@@ -1,6 +1,7 @@
-# Interface de consulta unica para os tres sinais (D7 do design). Sem
-# dashboards de negocio provisionados (non-goal) -- so as fontes de dados e
-# a correlacao entre elas (tarefa 7.1).
+# Interface de consulta unica para os tres sinais (D7 do design de
+# `observabilidade`), com paineis de saude operacional (host, Kubernetes,
+# Postgres) provisionados por `paineis-operacionais` -- ainda sem painel
+# de negocio ou de aplicacao (non-goal, ambas as changes).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -41,12 +42,22 @@ spec:
           volumeMounts:
             - name: datasources
               mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboards-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
             - name: data
               mountPath: /var/lib/grafana
       volumes:
         - name: datasources
           configMap:
             name: grafana-datasources
+        - name: dashboards-provider
+          configMap:
+            name: grafana-dashboards-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
         - name: data
           # Banco proprio do Grafana (sessao, preferencias) -- as fontes de
           # dados sao reprovisionadas do ConfigMap a cada subida (tarefa

@@ -74,9 +74,28 @@ mesma anotação `prometheus.io/scrape` que cert-manager/Tempo/Mimir/Loki/
 node-exporter já usam -- nenhum mecanismo de coleta novo, só mais um alvo
 descoberto pelo `discovery.kubernetes` que o Alloy já roda.
 
-**RBAC.** `kube-state-metrics` precisa de leitura cluster-wide (list/watch)
-de praticamente todo tipo de objeto do Kubernetes para expor seu estado --
-igual a qualquer instalação padrão dele; nenhuma permissão de escrita.
+**RBAC.** `kube-state-metrics` precisa de leitura cluster-wide (list/watch);
+nenhuma permissão de escrita. **Confirmado ao vivo**: o binário, sem
+restrição, tenta observar por padrão um conjunto maior de tipos do que o
+necessário para os painéis desta change -- incluindo `secrets` cluster-wide
+(só para uma métrica de contagem, não de conteúdo). Decidido não conceder
+essa permissão: `--resources=` explícito restringe a coleta exatamente aos
+tipos que os painéis usam (pods, deployments, replicasets, daemonsets,
+statefulsets, nodes, e o conjunto auxiliar de objetos comuns), e o RBAC
+concedido é o mesmo conjunto, nada além.
+
+**Scrape isolado do job "infra" compartilhado, achado ao vivo.** O job de
+scrape por anotação já usado por cert-manager/Tempo/Mimir/Loki/
+node-exporter/Postgres (`observabilidade`, tarefa 2.1) usa
+`target_label = "pod"`/`"namespace"` para identificar QUEM expôs a
+métrica -- correto para esses alvos, que não têm rótulo `pod`/`namespace`
+próprio. `kube-state-metrics` é o oposto: cada métrica sua já carrega
+`pod`/`namespace` descrevendo o OBJETO OBSERVADO, não o exporter. Com
+`honor_labels` no padrão (`false`), o rótulo do alvo VENCE e sobrescreve o
+da métrica -- toda série aparecia com a identidade do próprio
+kube-state-metrics, nunca do pod real (confirmado ao vivo, tarefa 6.2).
+Corrigido com um `prometheus.scrape` dedicado para ele, com
+`honor_labels = true`, e exclusão explícita do job compartilhado.
 
 ### D3. Anotação de scrape do Postgres via `inheritedMetadata` do CNPG
 

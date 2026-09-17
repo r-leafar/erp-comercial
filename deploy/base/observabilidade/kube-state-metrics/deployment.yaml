@@ -1,0 +1,52 @@
+# kube-state-metrics (tarefa 1.1): traduz o estado de objeto do
+# Kubernetes (fase do pod, reinicios, replicas esperadas vs. prontas) em
+# metrica Prometheus. Descoberto pelo Alloy pela mesma convencao de
+# anotacao ja usada por cert-manager/Tempo/Mimir/Loki/node-exporter
+# (tarefa 1.2) -- nenhum mecanismo de coleta novo.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-state-metrics
+  labels:
+    app.kubernetes.io/name: kube-state-metrics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube-state-metrics
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kube-state-metrics
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: kube-state-metrics
+      containers:
+        - name: kube-state-metrics
+          image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0
+          # CONFIRMADO AO VIVO: sem --resources, o binario tenta observar um
+          # conjunto MAIOR de tipos por padrao (inclui secrets, endpointslices,
+          # CSRs, mutating/validating webhook/admission policies,
+          # volumeattachments) do que o RBAC concedido acima cobre --
+          # sobra erro de permissao no log a cada tipo faltante (o processo
+          # continua saudavel, cada coletor falha isolado). --resources
+          # restringe explicitamente ao MESMO conjunto do RBAC: nada de
+          # listar secrets so para uma metrica de contagem que este ambiente
+          # nao usa.
+          args:
+            - --resources=configmaps,endpoints,limitranges,namespaces,nodes,persistentvolumeclaims,persistentvolumes,pods,replicationcontrollers,resourcequotas,services,daemonsets,deployments,replicasets,statefulsets,cronjobs,jobs,horizontalpodautoscalers,poddisruptionbudgets,storageclasses,ingresses,networkpolicies,leases
+          ports:
+            - name: metrics
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 15
