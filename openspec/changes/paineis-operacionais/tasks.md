@@ -143,10 +143,37 @@ verificavel isoladamente, com o criterio escrito junto quando nao e obvio.
       no kubelet). Host com 15Gi total, 7.5Gi livre + 4.5Gi buff/cache
       (11Gi "available") -- sem risco de esgotamento, nenhum ajuste de
       limite necessario.
-- [ ] 7.2 Destruir o ambiente e recria-lo do zero, confirmando que os
+- [x] 7.2 Destruir o ambiente e recria-lo do zero, confirmando que os
       quatro paineis (host, Postgres, pod/workload, e a raspagem do
       cAdvisor que os alimenta) voltam presentes e com dado real, sem
-      intervencao manual.
+      intervencao manual. **Confirmado ao vivo**: `destroy-cluster.sh` +
+      `bootstrap.sh` rodados pelo usuario; os tres dashboards reapareceram
+      via `/api/search` sem nenhum clique manual; `kube-state-metrics`,
+      cAdvisor e o exporter do Postgres confirmados consultaveis no Mimir
+      com dado real (28 pods distintos corretamente atribuidos,
+      confirmando o fix de `honor_labels` tambem sobrevive a recriacao).
+
+      **Dois achados reais adicionais, expostos pelo proprio teste**:
+      - Docker Hub removeu `minio/minio`/`minio/mc` por completo em
+        2026-09-11 -- bloqueava QUALQUER recriacao do zero, nao so desta
+        change (corrigido em PR separado, `fix/minio-mc-quay-io`, ver
+        `deploy/README.md`).
+      - **Intervencao manual em Job gerenciado por hook do ArgoCD deixa o
+        controller com estado de sincronizacao preso indefinidamente.**
+        Durante a investigacao do bug do MinIO, remover manualmente o
+        finalizer `argocd.argoproj.io/hook-finalizer` do Job
+        `minio-provision-buckets` (para desbloquear uma seclusao travada)
+        fez o ArgoCD perder o rastreamento da operacao -- toda sincronizacao
+        automatica seguinte ficava presa em
+        `"waiting for completion of hook batch/Job/minio-provision-buckets"`,
+        recriando o Job com uma imagem de uma revisao ANTERIOR (nao a mais
+        recente do `main`), repetidamente, mesmo com `automated.selfHeal`
+        religado. Resolvido disparando uma sincronizacao manual explicita
+        (`kubectl patch application ... -p '{"operation":{"sync":{"revision":"<sha>"}}}'`)
+        DEPOIS de garantir que o Job ja estava `Completed` -- nao antes.
+        Licao registrada em `deploy/README.md`: nunca mexer manualmente no
+        finalizer de um Job de hook do ArgoCD sem, em seguida, disparar
+        uma sincronizacao explicita para a revisao correta.
 - [x] 7.3 Confirmar que nenhum manifesto novo referencia caminho de host,
       nome de maquina ou classe de armazenamento que nao seja a padrao
       (a excecao do `bearer_token_file` do proprio ServiceAccount, que nao
