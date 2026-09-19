@@ -79,6 +79,15 @@ Leia primeiro os requisitos comuns acima; depois, so a secao do seu sistema.
   `deploy/bootstrap/install-cluster.sh`).
 - Garanta espaco em disco suficiente para os volumes persistentes da
   plataforma (Postgres, MinIO, Valkey).
+- **Se o bootstrap falhar com erro de lock do dpkg** (`Could not get lock
+  /var/lib/dpkg/lock-frontend`): o sistema esta rodando `unattended-upgrades`
+  em background. Opcoes:
+  - Esperar ~5min para o processo terminar, depois rodar o bootstrap novamente
+  - Ou, desabilitar a atualizacao automatica antes:
+    ```bash
+    sudo systemctl stop unattended-upgrades
+    sudo systemctl disable unattended-upgrades
+    ```
 - Nenhum dos itens da secao "Windows com WSL2" abaixo se aplica a voce.
 
 ### Windows com WSL2
