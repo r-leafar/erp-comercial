@@ -153,14 +153,23 @@ deploy/bootstrap/
     restore-sealing-key.sh   restaura a chave de selagem de dev
     apply-root-app.sh        aplica a Application raiz (overlays/dev)
 
-  destroy-cluster.sh         fora do orquestrador -- desfaz o que
-                              install-cluster.sh criou
+  destroy-cluster.sh         desfaz o que install-cluster.sh criou (remove
+                              instalacao completamente)
+  stop-cluster.sh            para o cluster k3s (mantém dados e instalacao)
+  start-cluster.sh           inicia o cluster apos parado com stop-cluster.sh
 ```
 
 Para levantar o ambiente do zero:
 
 ```bash
 ./deploy/bootstrap/bootstrap.sh
+```
+
+Para parar/iniciar o cluster (sem destruir):
+
+```bash
+./deploy/bootstrap/stop-cluster.sh     # para o cluster
+./deploy/bootstrap/start-cluster.sh    # inicia novamente
 ```
 
 Para destruir e recriar (verificacao de reprodutibilidade — tarefa 10.1):
