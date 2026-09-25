@@ -1,31 +1,92 @@
 ## Purpose
 
-Estabelece o produto como cadastro global da empresa, com codigo unico e sem
-recorte por filial, disponivel para consulta pelos demais modulos por interface
+Estabelece o produto vinculado a uma empresa, com codigo unico dentro dela e
+escopo obrigatorio de disponibilidade por filial (corporativo ou filiais
+especificas), disponivel para consulta pelos demais modulos por interface
 publica em vez de acesso direto aos seus dados.
 
 ## ADDED Requirements
 
-### Requirement: Cadastro global de produto
+### Requirement: Produto pertence a uma empresa, com codigo unico dentro dela
 
-O produto SHALL ser cadastrado de forma global, valido para toda a empresa. Seu
-codigo MUST ser unico em todo o cadastro, sem recorte por filial.
+O produto SHALL pertencer a exatamente uma empresa desde a sua criacao. Seu
+codigo MUST ser unico dentro da empresa a que pertence, e fica disponivel para
+consulta nas filiais dessa empresa compativeis com o seu escopo.
 
-#### Scenario: Produto e cadastrado com codigo unico
+#### Scenario: Produto e cadastrado com codigo unico na empresa
 
-- **WHEN** um produto e cadastrado com codigo ainda nao utilizado
-- **THEN** ele passa a existir e fica disponivel para consulta em qualquer filial
+- **WHEN** um produto e cadastrado com codigo ainda nao utilizado na sua empresa
+- **THEN** ele passa a existir e fica disponivel para consulta nas filiais da
+  empresa compativeis com o seu escopo
 
-#### Scenario: Codigo repetido e recusado
+#### Scenario: Codigo repetido na mesma empresa e recusado
 
-- **WHEN** um produto e cadastrado com codigo ja utilizado
+- **WHEN** um produto e cadastrado com codigo ja utilizado por outro produto da
+  mesma empresa
 - **THEN** a operacao e recusada com erro de negocio identificavel, mesmo que a
-  operacao tenha sido originada em outra filial
+  operacao tenha sido originada em outra filial dessa empresa
+
+#### Scenario: Mesmo codigo em empresa diferente e aceito
+
+- **WHEN** um produto e cadastrado com codigo ja utilizado, mas por um produto de
+  outra empresa
+- **THEN** o cadastro e aceito normalmente, sem conflito
 
 #### Scenario: Entrada invalida e recusada antes de qualquer efeito
 
 - **WHEN** um produto e submetido sem os dados obrigatorios
 - **THEN** a operacao e recusada por validacao e nenhum registro e criado
+
+### Requirement: Escopo obrigatorio do produto: corporativo ou filiais especificas
+
+O produto SHALL possuir um escopo, escolhido de forma obrigatoria na criacao,
+com exatamente dois valores possiveis: `Corporativo` ou `FiliaisEspecificas`.
+Produto sem escopo definido MUST NOT existir.
+
+#### Scenario: Escopo corporativo alcanca toda filial da empresa
+
+- **WHEN** um produto e cadastrado com escopo `Corporativo`
+- **THEN** ele fica disponivel em todas as filiais da empresa, inclusive filiais
+  criadas depois do cadastro, sem nenhuma acao adicional
+
+#### Scenario: Escopo de filiais especificas exige ao menos uma filial
+
+- **WHEN** um produto e cadastrado com escopo `FiliaisEspecificas`
+- **THEN** ele exige ao menos uma filial associada, e a operacao e recusada se
+  nenhuma filial for indicada
+
+#### Scenario: Filial associada deve pertencer a mesma empresa do produto
+
+- **WHEN** uma filial de empresa diferente da do produto e associada a um
+  produto `FiliaisEspecificas`
+- **THEN** a associacao e recusada com erro de negocio identificavel
+
+#### Scenario: Produto de filiais especificas fica disponivel so nas filiais associadas
+
+- **WHEN** um produto com escopo `FiliaisEspecificas` e consultado quanto a
+  disponibilidade
+- **THEN** apenas as filiais explicitamente associadas a ele o apresentam como
+  disponivel
+
+#### Scenario: Remover a ultima filial associada e recusado
+
+- **WHEN** a remocao da ultima filial associada a um produto `FiliaisEspecificas`
+  e solicitada
+- **THEN** a operacao e recusada com erro de negocio identificavel, e o produto
+  nao passa a `Corporativo` por esvaziamento
+
+#### Scenario: Troca de escopo e acao explicita
+
+- **WHEN** o escopo de um produto e alterado para `Corporativo`
+- **THEN** a alteracao ocorre como acao propria e deliberada, nunca inferida pela
+  ausencia de filiais associadas
+
+#### Scenario: Remover filial associada com saldo existente e recusado
+
+- **WHEN** a remocao de uma filial do conjunto associado a um produto
+  `FiliaisEspecificas` e solicitada e ja existe saldo de estoque registrado para
+  aquele produto naquela filial
+- **THEN** a operacao e recusada com erro de negocio identificavel
 
 ### Requirement: Alteracao de produto com concorrencia controlada
 
