@@ -51,9 +51,9 @@ dois modulos existindo.
 - **A aplicacao como carga de trabalho declarada**, com sinais de saude,
   identificacao de imagem por conteudo do commit, contagem de replicas zerada em
   desenvolvimento, e o dado inicial sem o qual a primeira execucao nao autentica.
-- **Primeira fatia vertical**: `Cadastro` com filial e produto, e `Estoque` com o
-  saldo por filial — somente a estrutura e a leitura. E o minimo que torna a
-  fronteira entre modulos verificavel.
+- **Primeira fatia vertical**: `Cadastro` com empresa, filial e produto, e
+  `Estoque` com o saldo por filial — somente a estrutura e a leitura. E o
+  minimo que torna a fronteira entre modulos verificavel.
 
 ### Non-goals
 
@@ -74,7 +74,9 @@ Declarados explicitamente porque o escopo de ERP tende a vazar:
 - **Parametros de empresa.** Ficou decidido que o grao do custo medio e o escopo
   da numeracao de pedido sao **parametros de empresa**, escolhidos na implantacao.
   A entidade que os guarda pertence a change do modulo que primeiro os consome;
-  cria-la aqui seria criar configuracao sem leitor.
+  cria-la aqui seria criar configuracao sem leitor. (Nao confundir com a entidade
+  `Empresa` criada nesta change: aqui trata-se de parametros de configuracao que
+  uma empresa escolhe, nao da propria entidade que identifica a empresa.)
 - **Emissor de identidade externo**, renovacao de token, encerramento de sessao e
   gestao de usuarios.
 - **Versionamento de API.**
@@ -114,10 +116,18 @@ proprio.
 - `aplicacao/implantacao-da-aplicacao`: sinais de saude e de prontidao,
   identificacao da versao em execucao pelo conteudo do commit, ausencia de
   replicas em desenvolvimento, e o dado inicial necessario a primeira execucao.
-- `cadastro/filial`: existencia da filial como entidade global do cadastro, sua
-  identificacao estavel referenciada pelos demais modulos, e a unicidade sem
-  recorte por filial.
-- `cadastro/produto`: cadastro do produto com unicidade global de codigo,
+- `cadastro/empresa`: existencia da empresa como entidade global do cadastro, com
+  codigo unico, inativacao em lugar de remocao preservando as referencias de
+  filial e produto que a apontam, e consulta individual e paginada — o mesmo
+  padrao de CRUD ja adotado por filial e produto.
+- `cadastro/filial`: existencia da filial vinculada a uma empresa
+  (`Filial.EmpresaId` obrigatorio desde a criacao), sua identificacao estavel
+  referenciada pelos demais modulos, e a unicidade de codigo dentro da empresa a
+  que pertence.
+- `cadastro/produto`: cadastro do produto vinculado a uma empresa
+  (`Produto.EmpresaId` obrigatorio desde a criacao), com unicidade de codigo
+  dentro da empresa, escopo obrigatorio de disponibilidade por filial
+  (`Corporativo` ou `FiliaisEspecificas`, este ultimo via `ProdutoFilial`),
   inativacao em lugar de remocao, e disponibilidade para leitura.
 - `estoque/saldo-por-filial`: existencia do saldo com recorte obrigatorio por
   filial e sua consulta, sem nenhuma movimentacao.

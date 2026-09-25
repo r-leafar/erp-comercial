@@ -173,6 +173,14 @@ grosseira e tecnica, e por filial como **atributo** do usuario; o dominio respon
 por autorizacao de negocio, como invariante do agregado que retorna erro de
 negocio.
 
+> **Nota (revisao empresa/escopo de produto):** o caso de um usuario com acesso a
+> filiais de mais de uma empresa (ex.: contador, consultoria externa) ja esta
+> coberto por este mecanismo. Filiais multivaloradas no contrato interno nao
+> pressupoem uma unica empresa dona, e a restricao de `aplicacao/autenticacao-e-
+> autorizacao` opera por filial, nao por empresa. Nenhuma alteracao nesta
+> capacidade nem nesta decisao foi necessaria quando `cadastro/empresa` foi
+> introduzida — registrado aqui para nao ser redescoberto como lacuna.
+
 ### D5. Erro hibrido, resposta uniforme
 
 Falha esperada de negocio e resultado, nao excecao. Falha inesperada e excecao.
@@ -342,6 +350,80 @@ O recorte por filial ja aparece na chave do saldo, porque adiciona-lo depois
 seria alteracao de chave primaria — exatamente o tipo de mudanca que D7 proibe em
 uma unica release.
 
+### D13. Empresa e Filial/Produto se ligam por FK explicita, nunca por identificador codificado
+
+`Empresa` e uma entidade propria, distinta de `Filial` — um grupo pode operar
+mais de uma empresa, e cada empresa possui varias filiais. O vinculo entre elas
+e sempre uma coluna propria (`Filial.EmpresaId`, `Produto.EmpresaId`), nunca
+parte codificada do proprio identificador tecnico.
+
+```
+   REJEITADO                               ESCOLHIDO
+   ==========                               =========
+
+   FilialId = metade-empresa                FilialId = GUID opaco
+              + metade-filial                           |
+                    |                                    v
+                    v                           coluna EmpresaId propria,
+     decodificar para saber a empresa          validada por FK de verdade
+     nenhuma FK real de banco garante
+     que a "metade" aponta pra uma
+     empresa que existe
+```
+
+`FilialId`, `ProdutoId` e `EmpresaId` continuam identificadores tecnicos opacos,
+sem significado embutido — a mesma regra que ja vale para os demais
+identificadores desta change.
+
+**Consequencia que evita:** tres, na mesma decisao.
+
+- Um identificador codificado nao e validavel por integridade referencial: nada
+  no banco impede que a "metade" que deveria ser uma empresa aponte para uma
+  empresa inexistente.
+- Se uma filial (ou produto) precisar mudar de empresa dona, um FK vira um
+  UPDATE de coluna; um identificador codificado exigiria trocar a propria chave
+  primaria, quebrando toda referencia ja registrada — exatamente o tipo de
+  mudanca que D7 ja proibe numa unica release.
+- Consultas como "quais filiais/produtos sao desta empresa" usam indice normal
+  sobre uma coluna, em vez de decodificar ou fatiar um identificador.
+
+**Alternativa recusada:** identificador composto, com parte do GUID reservada
+para a empresa. Foi considerada e descartada explicitamente pelos tres motivos
+acima.
+
+### D14. Escopo do produto e um campo explicito, nunca inferido pela ausencia de filial associada
+
+O produto tem exatamente dois escopos, escolhidos de forma obrigatoria na
+criacao: `Corporativo` (visivel em todas as filiais da empresa, inclusive
+filiais criadas no futuro, sem nenhuma acao manual) ou `FiliaisEspecificas`
+(visivel somente no subconjunto associado via `ProdutoFilial`, que exige ao
+menos uma filial sempre que este e o escopo).
+
+```
+   REJEITADO                                 ESCOLHIDO
+   ==========                                 =========
+   sem campo Escopo                           campo Escopo explicito
+   "corporativo" = ProdutoFilial vazio        "corporativo" so quando o
+        |                                      usuario escolhe Corporativo
+        v
+   remover a ultima filial vira               remover a ultima filial de
+   Corporativo por efeito colateral           FiliaisEspecificas e RECUSADO;
+   silencioso da remocao                      virar Corporativo e acao propria
+```
+
+**Consequencia que evita:** a mesma que D5 evita para erro de negocio — um
+efeito relevante nao pode nascer como consequencia silenciosa de outra
+operacao. Se "corporativo" fosse inferido da ausencia de linhas em
+`ProdutoFilial`, remover a ultima filial associada mudaria o escopo do produto
+sem que ninguem tivesse decidido isso, e sem nenhum caso de uso que descreva
+essa transicao. Com o campo explicito, remover a ultima filial e recusado como
+erro de negocio, e virar `Corporativo` exige uma acao propria e auditavel.
+
+**Alternativa recusada:** inferir o escopo pela presenca ou ausencia de
+associacoes em `ProdutoFilial`, sem campo proprio. Rejeitada porque transforma
+uma mudanca de escopo em efeito colateral de uma remocao, em vez de decisao
+deliberada do usuario.
+
 ## Propriedades de desenvolvimento que NAO valem em producao
 
 Registradas aqui para que ninguem confunda os dois ambientes:
@@ -373,6 +455,7 @@ Registradas aqui para que ninguem confunda os dois ambientes:
 | Divergencia entre a configuracao local e o segredo do cluster | Falha de autenticacao sem causa aparente | D8: origem unica; a configuracao local e derivada e descartavel |
 | Muitas capacidades numa change so | Change longa, dificil de fechar | Cada capacidade tem criterio de verificacao proprio e independente; a ordem das tarefas permite fechar em blocos |
 | Fatia vertical modelada de menos, com campo escolhido por conveniencia | O que nasce aqui fica congelado por D7: corrigir depois custa tres releases | Criterio de escolha de campo descrito abaixo; ausencia e mais barata que erro |
+| Escopo do produto (`Corporativo`/`FiliaisEspecificas`) fixa filial como o unico criterio de disponibilidade | Se surgir necessidade de recorte por outro criterio (ex.: canal, regiao), o campo `Escopo` precisa de nova alternativa, nao apenas extensao aditiva | Cobre a necessidade conhecida hoje (D14); outro criterio de recorte e decisao de outra change |
 
 ### A fatia tem dois riscos opostos, e o segundo e menos obvio
 
@@ -429,7 +512,7 @@ implantacao e um caminho de retorno.
           (verificavel com um endpoint protegido que falha e responde)
    3. persistencia, escrita auditada, concorrencia otimista
    4. evolucao de schema aplicada antes da troca de versao
-   5. Cadastro: filial e produto
+   5. Cadastro: empresa, filial e produto
    6. Estoque: saldo por filial  --> aqui a fronteira passa a ser testavel
    7. a aplicacao como carga declarada, com replicas zeradas
 ```
@@ -458,3 +541,11 @@ Adiaveis sem alterar specs, abordagem ou divisao de tarefas:
   producao existir; nao afeta o desenho do contrato.
 - **Frequencia da verificacao de fechamento** descrita acima, uma vez que o dia a
   dia nao exercita imagem nem manifestos.
+- **Preco por filial, rastreamento de atividade por filial, e parametro
+  especifico por filial de um produto corporativo.** Nenhuma pertence a
+  fundacao — cada uma e uma tabela associativa por identificacao
+  (produto+filial), no mesmo padrao que `Saldo` ja estabelece, e chega com a
+  change do modulo que primeiro a consumir. O modulo de preco, em particular,
+  vai reencontrar o dilema resolvido em D14 (discriminador explicito em vez
+  de inferir um valor padrao pela ausencia de linha) e pode reaproveitar o
+  mesmo raciocinio.

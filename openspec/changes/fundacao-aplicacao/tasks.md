@@ -160,48 +160,80 @@ verificavel isoladamente, com o criterio escrito junto quando nao e obvio.
       (remocao, renomeacao, obrigatoriedade sem valor padrao, mudanca incompativel
       de tipo) e o procedimento de renomeacao em releases sucessivas.
 
-## 9. Cadastro: filial e produto
+## 9. Cadastro: empresa, filial e produto
 
-- [ ] 9.1 Implementar a filial como entidade global, com codigo unico.
+- [ ] 9.1 Implementar a empresa como entidade global, com codigo unico.
       Verificacao: codigo repetido e recusado com erro de negocio identificavel.
-- [ ] 9.2 Expor a identificacao da filial nos contratos publicos do modulo, para
+- [ ] 9.2 Implementar a inativacao de empresa preservando as referencias
+      existentes de filial e produto que a apontam. Verificacao: dados que a
+      referenciam continuam integros e consultaveis.
+- [ ] 9.3 Implementar a consulta individual e a listagem paginada de empresas.
+- [ ] 9.4 Implementar a filial vinculada a uma empresa (`Filial.EmpresaId`
+      obrigatorio desde a criacao), com codigo unico dentro da empresa.
+      Verificacao: codigo repetido dentro da mesma empresa e recusado; o mesmo
+      codigo em empresa diferente e aceito.
+- [ ] 9.5 Expor a identificacao da filial nos contratos publicos do modulo, para
       referencia pelos demais.
-- [ ] 9.3 Implementar a inativacao de filial preservando as referencias
+- [ ] 9.6 Implementar a inativacao de filial preservando as referencias
       existentes. Verificacao: dados que a referenciam continuam integros e
       consultaveis.
-- [ ] 9.4 Implementar a consulta individual e a listagem paginada de filiais.
-- [ ] 9.5 Implementar o produto com codigo unico global. Verificacao: cadastro com
-      codigo repetido e recusado mesmo quando originado em outra filial.
-- [ ] 9.6 Implementar a alteracao de produto com recusa de conflito concorrente.
-- [ ] 9.7 Implementar a inativacao de produto e a recusa de produto inativo em
+- [ ] 9.7 Implementar a consulta individual e a listagem paginada de filiais.
+- [ ] 9.8 Implementar o produto vinculado a uma empresa (`Produto.EmpresaId`
+      obrigatorio desde a criacao), com codigo unico dentro da empresa.
+      Verificacao: cadastro com codigo repetido na mesma empresa e recusado,
+      mesmo quando originado em outra filial dessa empresa; o mesmo codigo em
+      empresa diferente e aceito.
+- [ ] 9.9 Implementar o campo `Escopo` do produto, obrigatorio na criacao, com os
+      valores `Corporativo` e `FiliaisEspecificas`. Verificacao: criacao sem
+      escolher o escopo e recusada por validacao.
+- [ ] 9.10 Implementar a relacao `ProdutoFilial` para produtos com escopo
+      `FiliaisEspecificas`. Verificacao: criar um produto `FiliaisEspecificas`
+      sem nenhuma filial associada e recusado; associar filial de empresa
+      diferente da do produto e recusado.
+- [ ] 9.11 Implementar a alteracao de produto com recusa de conflito concorrente.
+- [ ] 9.12 Recusar a remocao da ultima filial associada a um produto
+      `FiliaisEspecificas`, sem transformar implicitamente o escopo em
+      `Corporativo`. Verificacao: remover a ultima filial associada e recusado
+      com erro de negocio; trocar o escopo para `Corporativo` so ocorre por acao
+      explicita.
+- [ ] 9.13 Recusar a remocao de uma filial do conjunto associado a um produto
+      `FiliaisEspecificas` quando ja existir saldo de estoque registrado para
+      aquele produto naquela filial. Depende da secao 10 (saldo). Verificacao:
+      tentar remover a filial com saldo existente e confirmar a recusa.
+- [ ] 9.14 Implementar a inativacao de produto e a recusa de produto inativo em
       operacao nova.
-- [ ] 9.8 Implementar a consulta individual e a listagem paginada de produtos.
-- [ ] 9.9 Expor a consulta de existencia de produto nos contratos publicos, para
+- [ ] 9.15 Implementar a consulta individual e a listagem paginada de produtos.
+- [ ] 9.16 Expor a consulta de existencia de produto nos contratos publicos, para
       uso do outro modulo.
-- [ ] 9.10 Escrever os testes de integracao do modulo sobre dependencia real
-      efemera.
+- [ ] 9.17 Escrever os testes de integracao do modulo sobre dependencia real
+      efemera, cobrindo empresa, filial e produto.
 
 ## 10. Estoque: saldo por filial e a fronteira verificada
 
 - [ ] 10.1 Implementar o saldo identificado pela combinacao de produto e filial,
       com a filial obrigatoria desde a criacao da estrutura. Verificacao: saldo
       sem filial e recusado.
-- [ ] 10.2 Verificar independencia entre filiais: o mesmo produto apresenta saldos
+- [ ] 10.2 Recusar a criacao de saldo em filial fora do escopo permitido do
+      produto: a filial deve pertencer a mesma empresa do produto quando ele e
+      `Corporativo`, ou estar na lista associada via `ProdutoFilial` quando e
+      `FiliaisEspecificas`. Verificacao: tentar registrar saldo em filial nao
+      associada a um produto `FiliaisEspecificas` e confirmar recusa.
+- [ ] 10.3 Verificar independencia entre filiais: o mesmo produto apresenta saldos
       distintos em filiais distintas.
-- [ ] 10.3 Recusar combinacao repetida de produto e filial, preservando o registro
+- [ ] 10.4 Recusar combinacao repetida de produto e filial, preservando o registro
       existente.
-- [ ] 10.4 Armazenar apenas as identificacoes de produto e de filial, sem copia de
+- [ ] 10.5 Armazenar apenas as identificacoes de produto e de filial, sem copia de
       dados e sem vinculo de integridade entre schemas. Verificacao: inspecao da
       estrutura.
-- [ ] 10.5 Obter dado descritivo de produto pela interface publica do cadastro.
+- [ ] 10.6 Obter dado descritivo de produto pela interface publica do cadastro.
       Verificacao: nenhuma copia local e mantida.
-- [ ] 10.6 Restringir a consulta de saldo as filiais da identidade. Verificacao:
+- [ ] 10.7 Restringir a consulta de saldo as filiais da identidade. Verificacao:
       consulta em filial nao pertencente e recusada sem revelar o dado.
-- [ ] 10.7 Distinguir saldo inexistente de saldo igual a zero na consulta.
-- [ ] 10.8 **Confirmar que nenhuma operacao de movimentacao, reserva,
+- [ ] 10.8 Distinguir saldo inexistente de saldo igual a zero na consulta.
+- [ ] 10.9 **Confirmar que nenhuma operacao de movimentacao, reserva,
       transferencia ou apuracao de custo foi exposta.** Este e o criterio que
       impede a fatia de virar a change do modulo de estoque.
-- [ ] 10.9 **Com dois modulos existindo, confirmar que os testes de arquitetura
+- [ ] 10.10 **Com dois modulos existindo, confirmar que os testes de arquitetura
       agora podem falhar**: introduzir deliberadamente uma referencia de um modulo
       ao interior do outro e conferir que a construcao falha. Sem esta
       verificacao, a decisao central da change nao esta provada.
@@ -274,6 +306,15 @@ verificavel isoladamente, com o criterio escrito junto quando nao e obvio.
 - [ ] 14.4 Registrar as pendencias deixadas em aberto: lista final de perfis de
       autorizacao, exposicao da descricao da interface fora de desenvolvimento, e
       frequencia da verificacao de implantacao completa.
+- [ ] 14.4a Registrar como decisao adiada, para os modulos que a consumirem:
+      preco por filial (inclusive o dilema de inferir preco padrao pela
+      ausencia de linha, ja resolvido aqui para `Escopo` e reaproveitavel la),
+      rastreamento de quais filiais ja venderam ou movimentaram um produto
+      (depende de movimentacao, fora desta fatia), e parametro especifico por
+      filial de um produto corporativo. Nenhuma pertence a fundacao: cada uma
+      e uma tabela associativa por identificacao (produto+filial), no mesmo
+      padrao que `Saldo` ja estabelece, sem exigir mudanca no que foi
+      decidido aqui.
 - [ ] 14.5 Registrar que os parametros de empresa (grao do custo medio e escopo da
       numeracao de pedido) permanecem sem entidade que os guarde, e que ela
       pertence a change do modulo que primeiro os consumir.
