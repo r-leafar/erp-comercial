@@ -481,6 +481,12 @@ context: |
     - Sem delete fisico em Cadastro: flag ativo + query filter global
     - Paginacao: offset com envelope padrao (items, total, page, size);
       cursor apenas se surgir listagem realmente grande
+    - Datas e horas: persistidas SEMPRE em UTC (timestamptz), em qualquer
+      modulo, nao so telemetria. Dominio e Application nunca veem fuso
+      local. Conversao para o fuso de exibicao e responsabilidade da
+      camada de apresentacao, a partir do fuso configurado no perfil do
+      usuario -- ver INTERNACIONALIZACAO (i18n) DO PRODUTO sobre onde esse
+      perfil mora (ainda em aberto)
     - Testes: Domain com unit test puro; Application e Infrastructure com
       Testcontainers (Postgres e MinIO reais, nunca InMemory: presigned e
       comportamento de S3 nao existem em adapter de disco); fronteiras de
@@ -586,10 +592,27 @@ context: |
       visivel: "vendas" e um de quatro modulos, e o nome mentiria
       sobre o escopo
 
-  IDIOMA
+  IDIOMA (DESENVOLVIMENTO)
     - Artefatos OpenSpec e documentacao em portugues (pt-BR)
     - Codigo, identificadores e nomes de arquivo em portugues quando
       expressam o dominio; termos tecnicos em ingles
+
+  INTERNACIONALIZACAO (i18n) DO PRODUTO
+    Distinto do IDIOMA (DESENVOLVIMENTO) acima -- aquele e sobre codigo e
+    documentacao; este e sobre a interface que o usuario final usa. O
+    PRODUTO e multi-idioma. Idiomas iniciais: ingles e portugues (pt-BR).
+
+    - Fuso horario de exibicao segue o mesmo principio: configurado no
+      perfil do usuario, nunca fixo no servidor nem inferido do host (ver
+      CROSS-CUTTING sobre UTC na persistencia)
+    - GAP EM ABERTO: "perfil do usuario" (onde idioma e fuso horario
+      preferidos de cada pessoa sao guardados) ainda NAO tem modulo dono.
+      `fundacao-aplicacao` exclui explicitamente "gestao de usuarios" dos
+      seus non-goals; a Conta desenhada em `onboarding-saas` cobre so o
+      administrador criado pelo auto-cadastro, nao qualquer usuario da
+      empresa. Decidir onde mora esse perfil e pre-requisito de qualquer
+      implementacao de i18n ou conversao de fuso horario, nao um detalhe
+      a parte
 
 rules:
   proposal:
