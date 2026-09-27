@@ -1,25 +1,33 @@
 ## Purpose
 
-Estabelece a filial como entidade global do cadastro e como unidade de recorte
-usada pelos demais modulos, que a referenciam apenas por identificacao e nunca por
+Estabelece a filial vinculada a uma empresa e como unidade de recorte usada
+pelos demais modulos, que a referenciam apenas por identificacao e nunca por
 copia dos seus dados.
 
 ## ADDED Requirements
 
-### Requirement: Filial e entidade global do cadastro
+### Requirement: Filial pertence a uma empresa, com codigo unico dentro dela
 
-A filial SHALL ser cadastrada de forma global, sem recorte por outra filial. Seu
-codigo MUST ser unico em todo o cadastro.
+A filial SHALL pertencer a exatamente uma empresa desde a sua criacao. Seu
+codigo MUST ser unico dentro da empresa a que pertence, sem recorte por outra
+filial da mesma empresa.
 
-#### Scenario: Filial e cadastrada com codigo unico
+#### Scenario: Filial e cadastrada com codigo unico na empresa
 
-- **WHEN** uma filial e cadastrada com codigo ainda nao utilizado
+- **WHEN** uma filial e cadastrada com codigo ainda nao utilizado na sua empresa
 - **THEN** ela passa a existir e fica disponivel para consulta
 
-#### Scenario: Codigo repetido e recusado
+#### Scenario: Codigo repetido na mesma empresa e recusado
 
-- **WHEN** uma filial e cadastrada com codigo ja utilizado por outra
+- **WHEN** uma filial e cadastrada com codigo ja utilizado por outra filial da
+  mesma empresa
 - **THEN** a operacao e recusada com erro de negocio identificavel
+
+#### Scenario: Mesmo codigo em empresa diferente e aceito
+
+- **WHEN** uma filial e cadastrada com codigo ja utilizado, mas por uma filial de
+  outra empresa
+- **THEN** o cadastro e aceito normalmente, sem conflito
 
 ### Requirement: Identificacao estavel referenciada pelos demais modulos
 
