@@ -14,6 +14,32 @@ context: |
     subarvore, inativacao em cascata e forma de representacao -- sao
     decisao da change de Cadastro, nao do contexto.
 
+  VISAO FUTURA: PDV DESKTOP OFFLINE E APP MOBILE
+    O sistema nao termina no backend online. Ha um PDV desktop planejado,
+    que sincroniza com o backend mas PRECISA operar com rede intermitente
+    ou ausente por periodos (ponto de venda nao pode depender de internet
+    o tempo todo), e um app mobile futuro. Nenhum dos dois tem change
+    ainda -- isso e so o contexto que evita decisao nova que assuma
+    conectividade constante.
+
+    Duas decisoes ja tomadas neste arquivo colidem com PDV offline e ainda
+    NAO foram revisadas:
+    - Numeracao de pedido sem lacunas (exigencia fiscal) pressupoe contador
+      central alcancavel no momento da escrita. Pedido criado offline nao
+      consegue esse numero na hora; reconciliar depois arrisca lacuna ou
+      colisao entre dispositivos
+    - "Refresh token, logout, gestao de usuarios" e non-goal atual (pensado
+      pra app sempre online, token curto renovado a qualquer momento). PDV
+      operando horas sem rede com o mesmo token nao tem como renovar
+
+    O que ja ajuda, sem precisar mudar: consistencia eventual entre modulos
+    e "estoque negativo e aceitavel" ja sao a mentalidade certa pra sync de
+    PDV tambem -- so precisam se estender de "entre modulos do mesmo
+    backend" para "entre dispositivo e nuvem"
+
+    NAO decidir numeracao de pedido nem sessao/token em nenhuma change nova
+    sem verificar explicitamente se a decisao sobrevive a um PDV offline
+
   STACK
     - .NET 10 (SDK 10.0.301), Minimal API
     - PostgreSQL via CloudNativePG (EF Core + Npgsql para escrita;
