@@ -66,32 +66,47 @@ context: |
     Nunca use `if (ambiente == dev)` no codigo: a variacao mora na
     configuracao e nos overlays do GitOps.
 
-  MULTI-FILIAL (1 empresa, N filiais)
-    - Cadastro e GLOBAL: unicidade sem filial (unique(codigo))
+  MULTI-EMPRESA E MULTI-FILIAL (N empresas, cada uma com N filiais)
+    Revisado em `fundacao-aplicacao` (cadastro/empresa): a suposicao original
+    de UMA empresa por implantacao caiu. Empresa e agora o topo da
+    hierarquia do cadastro.
+    - Empresa e GLOBAL: unicidade de codigo sem recorte por nenhuma outra
+      entidade -- nao ha nada acima dela
+    - Filial e Produto sao escopados POR EMPRESA: `EmpresaId` obrigatorio
+      desde a criacao, e unicidade de codigo dentro da empresa a que
+      pertencem, nao mais global
     - Filial e uma entidade de Cadastro, exposta em Cadastro.Contracts;
       os demais modulos a referenciam apenas por FilialId
       (strongly-typed id no SharedKernel)
     - Estoque e POR FILIAL: saldo(produto_id, filial_id) com PK composta;
       transferencia entre filiais e caso de uso de dominio
     - Vendas e Financeiro registram a filial de origem
-    - PARAMETROS DE EMPRESA (nao sao pendencias, e nao sao multi-tenant:
-      a escolha continua sendo multi-filial de UMA empresa). Os dois modos
-      existem e sao escolhidos na implantacao. A entidade que os guarda
-      nasce na change do modulo que primeiro os consumir, nunca antes --
-      configuracao sem leitor e codigo morto:
-        * custo medio: por filial ou global. A tabela nasce SEMPRE no grao
-          fino (produto_id, filial_id); o parametro decide como o movimento
-          RECALCULA (global recalcula todas as linhas do produto juntas).
-          Se a forma da tabela variasse com o parametro seriam dois
-          schemas sem caminho entre eles. Trocar depois do primeiro
-          movimento e evento contabil com recalculo de historico, nao
-          toggle: escolha de implantacao, imutavel na pratica
-        * numeracao de pedido: por filial ou global. Contador com coluna
-          de ESCOPO (o escopo e a filial ou um valor unico global), entao
-          trocar depois afeta so os proximos pedidos e o historico fica
-          intacto -- este e configuravel de verdade. Numeracao sequencial
-          SEM lacunas (exigencia fiscal) nao sai de SEQUENCE do Postgres,
-          exige tabela de contador com lock
+    - Autorizacao opera POR FILIAL, nao por empresa (ver AUTENTICACAO E
+      AUTORIZACAO): um usuario com filiais de mais de uma empresa (ex.:
+      contador, consultoria externa) ja e um caso coberto pelo desenho, sem
+      alteracao adicional
+    - COMO uma empresa nova entra no sistema (provisionamento manual por
+      alguem interno vs. auto-cadastro self-service com trial) e objeto da
+      change separada `onboarding-saas`, ainda em exploracao -- a entidade
+      Empresa existir em `fundacao-aplicacao` nao decide isso
+    - PARAMETROS DE EMPRESA (nao sao pendencias). Os dois modos abaixo
+      existem e sao escolhidos por empresa, na implantacao ou no cadastro
+      dela. A entidade que os guarda nasce na change do modulo que primeiro
+      os consumir, nunca antes -- configuracao sem leitor e codigo morto:
+        * custo medio: por filial ou global DENTRO DA EMPRESA. A tabela
+          nasce SEMPRE no grao fino (produto_id, filial_id); o parametro
+          decide como o movimento RECALCULA (global recalcula todas as
+          linhas do produto daquela empresa juntas). Se a forma da tabela
+          variasse com o parametro seriam dois schemas sem caminho entre
+          eles. Trocar depois do primeiro movimento e evento contabil com
+          recalculo de historico, nao toggle: escolha de implantacao,
+          imutavel na pratica
+        * numeracao de pedido: por filial ou global DENTRO DA EMPRESA.
+          Contador com coluna de ESCOPO (o escopo e a filial ou um valor
+          unico por empresa), entao trocar depois afeta so os proximos
+          pedidos e o historico fica intacto -- este e configuravel de
+          verdade. Numeracao sequencial SEM lacunas (exigencia fiscal) nao
+          sai de SEQUENCE do Postgres, exige tabela de contador com lock
 
   MENSAGERIA / CONSISTENCIA
     - Consistencia eventual entre modulos (estoque negativo e aceitavel)
@@ -444,7 +459,9 @@ context: |
     - Automacao de write-back de tag de imagem
     - Fiscal brasileiro (NF-e, ICMS, PIS/COFINS)
     - Versionamento de API
-    - Multi-tenant SaaS (a escolha e multi-filial de uma unica empresa)
+    - Cobranca, ciclo de vida de assinatura e trial (self-service de
+      empresa nova e explorado em `onboarding-saas`, mas billing nao tem
+      spec nenhuma ainda)
 
   REPOSITORIO E VERSIONAMENTO
     - MONOREPO unico: codigo, deploy e openspec no mesmo repositorio
