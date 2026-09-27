@@ -77,6 +77,36 @@ como atributo do usuario, e nao como perfil.
 - **WHEN** uma operacao que exige recorte por filial nao indica filial alguma
 - **THEN** a requisicao e recusada por entrada invalida
 
+### Requirement: Acesso do administrador de empresa resolvido dinamicamente por filial
+
+O usuario com o papel `AdminEmpresa` de uma empresa SHALL ter acesso a toda
+filial que pertenca a essa empresa, resolvido no momento da autorizacao a
+partir da interface publica de `cadastro/filial`, e nao a partir da lista fixa
+de filiais do contrato interno. Este mecanismo convive com a lista fixa sem
+substitui-la: um usuario pode ter as duas formas de acesso ao mesmo tempo.
+
+#### Scenario: AdminEmpresa acessa filial cadastrada apos a emissao do token
+
+- **WHEN** um usuario com papel `AdminEmpresa` da empresa X requisita operacao
+  sobre uma filial pertencente a empresa X, criada depois da emissao do seu
+  token
+- **THEN** a operacao prossegue, sem exigir reemissao do token
+
+#### Scenario: AdminEmpresa nao acessa filial de outra empresa
+
+- **WHEN** um usuario com papel `AdminEmpresa` da empresa X requisita operacao
+  sobre filial pertencente a empresa diferente de X, e essa filial nao esta na
+  sua lista fixa de filiais
+- **THEN** a operacao e recusada sem produzir efeito nem revelar a existencia
+  da filial
+
+#### Scenario: Lista fixa de filiais continua valendo para acesso pontual
+
+- **WHEN** um usuario sem o papel `AdminEmpresa`, mas com filiais explicitas no
+  contrato interno, requisita operacao sobre uma dessas filiais
+- **THEN** a operacao prossegue pelo mecanismo original, sem nenhuma consulta a
+  `cadastro/filial`
+
 ### Requirement: Autorizacao tecnica separada da autorizacao de negocio
 
 Perfis SHALL responder apenas por autorizacao tecnica e grosseira sobre operacoes.

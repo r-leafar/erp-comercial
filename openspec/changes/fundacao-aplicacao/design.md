@@ -181,6 +181,23 @@ negocio.
 > capacidade nem nesta decisao foi necessaria quando `cadastro/empresa` foi
 > introduzida — registrado aqui para nao ser redescoberto como lacuna.
 
+> **Nota (papel `AdminEmpresa` e resolucao dinamica de filial):** o mecanismo
+> acima cobre bem o acesso pontual e ja enumeravel (contador com filiais de mais
+> de uma empresa), mas nao cobre o admin de uma empresa recem-criada, que precisa
+> enxergar toda filial que ele proprio cadastra, sem esperar um token novo. Para
+> esse caso o claim carrega `EmpresaId` e o papel `AdminEmpresa`, e a policy
+> resolve o conjunto de filiais acessiveis consultando a interface publica de
+> `cadastro/filial` no momento da autorizacao, em vez de comparar contra uma
+> lista fixa do token. Convive com o mecanismo original sem substitui-lo: um
+> usuario pode ter as duas formas de acesso ao mesmo tempo (lista fixa para
+> filiais pontuais, `AdminEmpresa` para a empresa que administra). Risco
+> registrado, nao resolvido aqui: essa consulta acontece por requisicao, sem
+> cache — `plataforma-cache-e-arquivos` e non-goal desta change — e merece
+> atencao se `cadastro/filial` virar hot path do pipeline de autorizacao.
+> Motivada pela exploracao do fluxo de auto-cadastro (change futura de
+> onboarding SaaS), mas o mecanismo em si nao depende dela: um admin provisionado
+> manualmente tem o mesmo problema.
+
 ### D5. Erro hibrido, resposta uniforme
 
 Falha esperada de negocio e resultado, nao excecao. Falha inesperada e excecao.

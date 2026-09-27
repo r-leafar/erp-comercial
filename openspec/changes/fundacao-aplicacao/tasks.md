@@ -115,6 +115,12 @@ verificavel isoladamente, com o criterio escrito junto quando nao e obvio.
       insuficiente usam o formato uniforme e codigos estaveis diferentes.
 - [ ] 6.9 Implementar o contexto de execucao de usuario e filial, consumido pelos
       casos de uso sem que eles distingam a origem da execucao.
+- [ ] 6.10 Implementar o papel `AdminEmpresa`: resolver o conjunto de filiais
+      acessiveis consultando a interface publica de `cadastro/filial` da
+      empresa do usuario, em vez de comparar contra a lista fixa do token.
+      Depende da secao 9 (cadastro). Verificacao: filial criada apos a emissao
+      do token fica acessivel ao `AdminEmpresa` da mesma empresa sem
+      reemissao; filial de empresa diferente continua recusada.
 
 ## 7. Persistencia, auditoria e concorrencia
 
