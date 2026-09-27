@@ -40,6 +40,27 @@ context: |
     NAO decidir numeracao de pedido nem sessao/token em nenhuma change nova
     sem verificar explicitamente se a decisao sobrevive a um PDV offline
 
+  VISAO FUTURA: INTEGRACAO COM IA
+    O produto VAI ter integracao com IA -- isso e uma direcao ja decidida,
+    nao uma possibilidade. Nenhuma feature concreta foi escolhida ainda, e
+    nao ha change proposta; registrado aqui so para nao ser descoberto como
+    novidade quando a primeira feature aparecer, e para deixar UM principio
+    arquitetural ja acordado, para toda feature futura seguir:
+
+    - IA e mais uma COSTURA a isolar, no mesmo padrao ja usado para
+      IEventTransport, emissor JWT e backend S3: uma porta com um ponto de
+      troca, nunca chamada direta a um provedor especifico espalhada pelo
+      codigo
+    - IA SUGERE, o dominio DECIDE. Mesma separacao ja usada em D5 (Result
+      para erro esperado vs Exception para o inesperado) e em D4 (emissor
+      resolve autorizacao tecnica, dominio resolve autorizacao de negocio):
+      uma sugestao de IA nunca substitui uma invariante de dominio (ex.:
+      IA pode sugerir um desconto, mas a regra de "acima de 10% exige
+      supervisor" continua sendo verificada pelo dominio, nao pela IA)
+    - Quando existir, cada feature de IA consome dado de outro modulo pela
+      MESMA interface publica que qualquer outro consumidor usaria (Contracts
+      do modulo dono) -- nunca acesso direto a estrutura interna
+
   STACK
     - .NET 10 (SDK 10.0.301), Minimal API
     - PostgreSQL via CloudNativePG (EF Core + Npgsql para escrita;
