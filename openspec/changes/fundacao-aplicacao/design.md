@@ -53,7 +53,7 @@ instancia so.** O desenho abaixo e organizado em torno disso.
 
 ## Decisions
 
-### D1. A fatia vertical tem DOIS modulos, porque a fronteira exige dois
+### D1. A fatia vertical tem TRES modulos (Organizacao, Catalogo, Estoque), porque a fronteira exige mais de um
 
 A decisao mais cara desta change e a fronteira entre modulos. Ela e enunciada
 como "tipos em `Modules.X` nao referenciam `Modules.Y`, exceto sob
@@ -63,11 +63,11 @@ como "tipos em `Modules.X` nao referenciam `Modules.Y`, exceto sob
   COM UM MODULO SO                    COM DOIS MODULOS
   ================                    ================
 
-   Modules.Cadastro                    Modules.Cadastro
+   Modules.Organizacao                 Modules.Organizacao
         |                                   |        \
         v                                   |         \ proibido
    (nao ha para onde                        v          x
-    referenciar)                       Modules.Cadastro.Contracts
+    referenciar)                       Modules.Organizacao.Contracts
                                             ^          |
    o arch test passa                        |          v
    SEMPRE. Ele nao esta          permitido  +---- Modules.Estoque
@@ -76,10 +76,19 @@ como "tipos em `Modules.X` nao referenciam `Modules.Y`, exceto sob
                                        Agora ele e um teste.
 ```
 
-Um teste que nao pode falhar nao e um teste. Escolhemos `Cadastro` (filial e
-produto) e `Estoque` (saldo por filial) porque `Estoque` referencia a filial
-naturalmente, entao a fronteira e exercitada por uma necessidade real e nao por
-uma referencia inventada para o teste existir.
+Um teste que nao pode falhar nao e um teste. Escolhemos `Organizacao` (empresa e
+filial), `Catalogo` (produto) e `Estoque` (saldo por filial) porque `Estoque`
+referencia a filial (via `Organizacao.Contracts`) e o produto (via
+`Catalogo.Contracts`) naturalmente, entao a fronteira e exercitada por
+necessidades reais e nao por uma referencia inventada para o teste existir.
+
+**O antigo `Cadastro` foi dividido por bounded context** (ver `config.yaml`,
+DOMINIO): `Organizacao` e a base de tenancy e de autorizacao por filial e muda
+raramente; `Catalogo` e o nucleo rico (produto, e depois marca e categoria
+hierarquica) e muda todo dia. `Parceiros` (cliente e fornecedor) e planejado e
+**fora** desta change: nao ha projeto, schema nem consumidor ainda, e criar o
+modulo vazio seria andaime. `Produto` guarda `EmpresaId` apenas como ID (sem FK
+entre schemas); como `Catalogo` valida empresa e filial esta decidido em D15.
 
 **Consequencia que evita:** a fronteira ser declarada na change da fundacao e
 descoberta furada na primeira change de modulo, quando ja ha codigo apoiado nela.
@@ -105,7 +114,7 @@ por modulo, e ele e a **unica** coisa publica fora de `Contracts/`.
       | conhece exatamente um tipo por modulo
       v
    +--------------------------------------------------+
-   |  CadastroModule  (publico)                        |
+   |  OrganizacaoModule  (publico)                     |
    |    Registrar(servicos, configuracao)              |
    |    MapearEndpoints(rotas)                         |
    +--------------------------------------------------+
@@ -178,7 +187,7 @@ negocio.
 > coberto por este mecanismo. Filiais multivaloradas no contrato interno nao
 > pressupoem uma unica empresa dona, e a restricao de `aplicacao/autenticacao-e-
 > autorizacao` opera por filial, nao por empresa. Nenhuma alteracao nesta
-> capacidade nem nesta decisao foi necessaria quando `cadastro/empresa` foi
+> capacidade nem nesta decisao foi necessaria quando `organizacao/empresa` foi
 > introduzida — registrado aqui para nao ser redescoberto como lacuna.
 
 > **Nota (papel `AdminEmpresa` e resolucao dinamica de filial):** o mecanismo
@@ -187,13 +196,13 @@ negocio.
 > enxergar toda filial que ele proprio cadastra, sem esperar um token novo. Para
 > esse caso o claim carrega `EmpresaId` e o papel `AdminEmpresa`, e a policy
 > resolve o conjunto de filiais acessiveis consultando a interface publica de
-> `cadastro/filial` no momento da autorizacao, em vez de comparar contra uma
+> `organizacao/filial` no momento da autorizacao, em vez de comparar contra uma
 > lista fixa do token. Convive com o mecanismo original sem substitui-lo: um
 > usuario pode ter as duas formas de acesso ao mesmo tempo (lista fixa para
 > filiais pontuais, `AdminEmpresa` para a empresa que administra). Risco
 > registrado, nao resolvido aqui: essa consulta acontece por requisicao, sem
 > cache — `plataforma-cache-e-arquivos` e non-goal desta change — e merece
-> atencao se `cadastro/filial` virar hot path do pipeline de autorizacao.
+> atencao se `organizacao/filial` virar hot path do pipeline de autorizacao.
 > Motivada pela exploracao do fluxo de auto-cadastro (change futura de
 > onboarding SaaS), mas o mecanismo em si nao depende dela: um admin provisionado
 > manualmente tem o mesmo problema.
@@ -374,6 +383,11 @@ mais de uma empresa, e cada empresa possui varias filiais. O vinculo entre elas
 e sempre uma coluna propria (`Filial.EmpresaId`, `Produto.EmpresaId`), nunca
 parte codificada do proprio identificador tecnico.
 
+> **Nota (divisao em modulos):** `Filial.EmpresaId` e FK de banco real, pois
+> `Empresa` e `Filial` vivem em `Organizacao`. `Produto.EmpresaId`, agora em
+> `Catalogo`, e coluna propria SEM FK entre schemas; a integridade e verificada
+> na aplicacao conforme D15.
+
 ```
    REJEITADO                               ESCOLHIDO
    ==========                               =========
@@ -441,6 +455,45 @@ associacoes em `ProdutoFilial`, sem campo proprio. Rejeitada porque transforma
 uma mudanca de escopo em efeito colateral de uma remocao, em vez de decisao
 deliberada do usuario.
 
+### D15. Catalogo valida empresa e filial por consulta sincrona a Organizacao.Contracts
+
+`Produto.EmpresaId` e `ProdutoFilial.FilialId` apontam para entidades de outro
+modulo e outro schema, entao nao ha FK de banco. A integridade passa a ser
+garantida na aplicacao: ao criar ou alterar produto ou `ProdutoFilial`,
+`Catalogo` consulta uma porta minima em `Organizacao.Contracts` — a que empresa
+pertence esta filial, e a empresa e a filial estao ativas? — e recusa com erro de
+negocio se a regra "filial da mesma empresa do produto" nao se cumprir.
+
+```
+   Catalogo                          Organizacao
+   --------                          -----------
+   cria/altera ProdutoFilial
+      |  filial X pertence a empresa do produto? ativa?
+      +------------------------------> Organizacao.Contracts
+      <------------------------------  (EmpresaId, ativa)
+      |
+   grava (tx propria) ou recusa
+                                     Organizacao NUNCA referencia Catalogo
+```
+
+**Consequencia que evita:** a regra de mesma empresa ser garantida por convencao
+de quem chama. Consulta so ocorre na escrita de produto/`ProdutoFilial`, fora de
+caminho quente, e Organizacao e o modulo a montante, estavel e sem ciclo.
+
+**Alternativas recusadas**
+
+- *Confiar no claim do token.* O token diz a que filiais o usuario tem acesso, nao
+  a que empresa cada uma pertence; um usuario com filiais de duas empresas
+  associaria filial da empresa errada a um produto.
+- *Copia local alimentada por evento (filial, empresa) em Catalogo.* Contradiz
+  `organizacao/filial` (outros modulos nao mantem copia) e abre janela de recusa
+  falsa: filial recem-criada ainda sem evento entregue, exatamente o fluxo de
+  `onboarding-saas`.
+- *Voltar a um modulo so.* Desfaz o corte por bounded context sem necessidade.
+
+**Revisitar se:** o PDV offline precisar criar produto sem rede; ai a copia por
+evento passa a valer o custo.
+
 ## Propriedades de desenvolvimento que NAO valem em producao
 
 Registradas aqui para que ninguem confunda os dois ambientes:
@@ -464,7 +517,7 @@ Registradas aqui para que ninguem confunda os dois ambientes:
 
 | Risco | Consequencia | Mitigacao |
 |---|---|---|
-| A fatia vertical cresce ate virar a change do modulo de cadastro | A fundacao nunca fecha, e a fronteira segue nao verificada | Criterio escrito: nenhum caso de uso alem de criar, alterar, inativar e consultar; saldo nao se movimenta |
+| A fatia vertical cresce ate virar a change dos modulos de Organizacao e Catalogo | A fundacao nunca fecha, e a fronteira segue nao verificada | Criterio escrito: nenhum caso de uso alem de criar, alterar, inativar e consultar; saldo nao se movimenta |
 | A porta unica de registro vira porta larga, com muitos tipos publicos ao lado | A fronteira erode sem ninguem perceber | Arch test afirmando a **contagem** de tipos publicos fora de Contracts, nao apenas a existencia da porta |
 | Emissor de token local respondendo fora de desenvolvimento | Porta dos fundos completa | Teste que falha se a rota responder em qualquer outro ambiente |
 | Compatibilidade retroativa esquecida numa alteracao de schema | Requisicao falha durante a janela entre schema novo e pods antigos | Lista explicita do que e proibido em uma release; verificacao exercitando a janela com a versao anterior no ar |
@@ -476,7 +529,7 @@ Registradas aqui para que ninguem confunda os dois ambientes:
 
 ### A fatia tem dois riscos opostos, e o segundo e menos obvio
 
-O risco visivel e a fatia crescer ate consumir a change do modulo de cadastro.
+O risco visivel e a fatia crescer ate consumir a change dos modulos de Organizacao e Catalogo.
 O risco invisivel e o contrario.
 
 ```
@@ -529,7 +582,7 @@ implantacao e um caminho de retorno.
           (verificavel com um endpoint protegido que falha e responde)
    3. persistencia, escrita auditada, concorrencia otimista
    4. evolucao de schema aplicada antes da troca de versao
-   5. Cadastro: empresa, filial e produto
+   5. Organizacao (empresa, filial) e Catalogo (produto)
    6. Estoque: saldo por filial  --> aqui a fronteira passa a ser testavel
    7. a aplicacao como carga declarada, com replicas zeradas
 ```

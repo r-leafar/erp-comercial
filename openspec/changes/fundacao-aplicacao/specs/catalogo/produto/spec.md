@@ -61,6 +61,17 @@ Produto sem escopo definido MUST NOT existir.
   produto `FiliaisEspecificas`
 - **THEN** a associacao e recusada com erro de negocio identificavel
 
+#### Scenario: Empresa e filial sao verificadas pela interface publica de Organizacao
+
+- **WHEN** um produto ou uma associacao `ProdutoFilial` e criado ou alterado
+- **THEN** a existencia, a situacao ativa e a empresa da filial sao obtidas por
+  `Organizacao.Contracts`, e nao pelo token nem por copia local
+
+#### Scenario: Empresa ou filial inativa e recusada
+
+- **WHEN** um produto e criado para empresa inativa, ou associado a filial inativa
+- **THEN** a operacao e recusada com erro de negocio identificavel
+
 #### Scenario: Produto de filiais especificas fica disponivel so nas filiais associadas
 
 - **WHEN** um produto com escopo `FiliaisEspecificas` e consultado quanto a
@@ -138,13 +149,13 @@ identificacao e em listagem com o envelope uniforme de paginacao.
 ### Requirement: Acesso de outros modulos por interface publica
 
 Outro modulo que precise de dado de produto SHALL obte-lo pela interface publica
-do cadastro. Acesso direto a estrutura de dados do cadastro MUST NOT ocorrer, e
+de `Catalogo.Contracts`. Acesso direto a estrutura de dados de Catalogo MUST NOT ocorrer, e
 nao MUST existir vinculo de integridade entre as estruturas dos modulos.
 
 #### Scenario: Modulo consulta produto pela interface publica
 
 - **WHEN** outro modulo precisa verificar a existencia de um produto
-- **THEN** ele consulta a interface publica do cadastro
+- **THEN** ele consulta a interface publica de `Catalogo.Contracts`
 
 #### Scenario: Ausencia de vinculo entre estruturas de modulos
 

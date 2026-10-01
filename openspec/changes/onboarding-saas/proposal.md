@@ -2,7 +2,7 @@
 
 ## Why
 
-`fundacao-aplicacao` (cadastro/empresa) ja torna o cadastro multi-empresa:
+`fundacao-aplicacao` (organizacao/empresa) ja torna o cadastro multi-empresa:
 codigo unico por empresa, e nao mais global. Mas nenhuma change decide **como**
 uma empresa nova entra no sistema. Hoje isso so acontece se alguem com acesso
 direto ao banco ou a um endpoint interno criar a empresa manualmente -- nao ha
@@ -32,7 +32,7 @@ de entrada, sem gerar nenhum efeito real): https://claude.ai/artifact/7vb2R2rHZ3
   Duracao exata e o que acontece na expiracao ficam como pergunta em aberto
   (ver Impact).
 - Consome o papel `AdminEmpresa` e a resolucao dinamica de filial por
-  interface publica de `cadastro/filial`, ja registrados em `fundacao-aplicacao`
+  interface publica de `organizacao/filial`, ja registrados em `fundacao-aplicacao`
   (D4 do design.md) -- **esta change nao re-especifica esse mecanismo**, so o
   aciona ao criar o primeiro usuario da empresa.
 
@@ -72,7 +72,7 @@ aqui -- esta change apenas os aciona.
 
 **Depende de**
 
-`fundacao-aplicacao` completa, em especial `cadastro/empresa` e o papel
+`fundacao-aplicacao` completa, em especial `organizacao/empresa` e o papel
 `AdminEmpresa` (D4). Dependencia de `adotar-keycloak` e uma pergunta em
 aberto: o auto-cadastro publico pode nao ser sustentavel sobre o emissor
 local de desenvolvimento, mas isso so se confirma ao desenhar a change

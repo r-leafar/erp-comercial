@@ -81,7 +81,7 @@ como atributo do usuario, e nao como perfil.
 
 O usuario com o papel `AdminEmpresa` de uma empresa SHALL ter acesso a toda
 filial que pertenca a essa empresa, resolvido no momento da autorizacao a
-partir da interface publica de `cadastro/filial`, e nao a partir da lista fixa
+partir da interface publica de `organizacao/filial`, e nao a partir da lista fixa
 de filiais do contrato interno. Este mecanismo convive com a lista fixa sem
 substitui-la: um usuario pode ter as duas formas de acesso ao mesmo tempo.
 
@@ -105,7 +105,7 @@ substitui-la: um usuario pode ter as duas formas de acesso ao mesmo tempo.
 - **WHEN** um usuario sem o papel `AdminEmpresa`, mas com filiais explicitas no
   contrato interno, requisita operacao sobre uma dessas filiais
 - **THEN** a operacao prossegue pelo mecanismo original, sem nenhuma consulta a
-  `cadastro/filial`
+  `organizacao/filial`
 
 ### Requirement: Autorizacao tecnica separada da autorizacao de negocio
 
