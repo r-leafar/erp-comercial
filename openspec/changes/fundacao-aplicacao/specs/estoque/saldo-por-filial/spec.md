@@ -65,7 +65,7 @@ copia dos seus dados e sem vinculo de integridade entre as estruturas dos modulo
 #### Scenario: Dado descritivo vem do modulo dono
 
 - **WHEN** a consulta de saldo precisa apresentar dado descritivo do produto
-- **THEN** ele e obtido pela interface publica do cadastro, e nao de copia local
+- **THEN** ele e obtido pela interface publica de `Catalogo.Contracts`, e nao de copia local
 
 ### Requirement: Consulta de saldo restrita a filial da identidade
 

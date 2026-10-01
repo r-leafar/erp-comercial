@@ -2,9 +2,18 @@ schema: spec-driven
 
 context: |
   DOMINIO
-  ERP de gestao de vendas, organizado em modulos:
-    - Cadastro    (Produto, Marca, Categoria, Cliente,
-                   Fornecedor, Filial)
+  ERP de gestao de vendas, organizado em modulos. O antigo "Cadastro"
+  foi dividido por bounded context (quem muda junto, fala a mesma
+  linguagem e tem consumidores distintos):
+    - Organizacao (Empresa, Filial) -- topo da hierarquia, base de tenancy
+                   e de autorizacao por filial; consumida por todos
+    - Catalogo    (Produto, Marca, Categoria) -- o que se vende e estoca
+    - Parceiros   (Cliente, Fornecedor) -- PLANEJADO, sem change e sem
+                   projeto: nasce quando Vendas, Compras ou Financeiro
+                   precisarem de Cliente ou Fornecedor de verdade. Cliente
+                   pode migrar para Vendas/CRM e Fornecedor para Compras;
+                   NAO criar agregado "Pessoa" compartilhado (papeis
+                   diferentes em contextos diferentes)
     - Estoque     (saldo, movimento, reserva, custo medio, transferencia)
     - Vendas      (pedido, itens, preco, desconto)
     - Financeiro  (titulo, baixa, conciliacao, fluxo de caixa)
@@ -12,7 +21,7 @@ context: |
     Categoria e HIERARQUICA. As consequencias -- profundidade, nivel em
     que o produto pendura, efeito de mover uma categoria sobre a
     subarvore, inativacao em cascata e forma de representacao -- sao
-    decisao da change de Cadastro, nao do contexto.
+    decisao da change de Catalogo, nao do contexto.
 
   VISAO FUTURA: PDV DESKTOP OFFLINE E APP MOBILE
     O sistema nao termina no backend online. Ha um PDV desktop planejado,
@@ -114,15 +123,20 @@ context: |
     configuracao e nos overlays do GitOps.
 
   MULTI-EMPRESA E MULTI-FILIAL (N empresas, cada uma com N filiais)
-    Revisado em `fundacao-aplicacao` (cadastro/empresa): a suposicao original
+    Revisado em `fundacao-aplicacao` (organizacao/empresa): a suposicao original
     de UMA empresa por implantacao caiu. Empresa e agora o topo da
-    hierarquia do cadastro.
+    hierarquia de Organizacao.
     - Empresa e GLOBAL: unicidade de codigo sem recorte por nenhuma outra
       entidade -- nao ha nada acima dela
     - Filial e Produto sao escopados POR EMPRESA: `EmpresaId` obrigatorio
       desde a criacao, e unicidade de codigo dentro da empresa a que
       pertencem, nao mais global
-    - Filial e uma entidade de Cadastro, exposta em Cadastro.Contracts;
+    - Produto mora em Catalogo e guarda `EmpresaId` apenas como ID (sem FK
+      entre schemas). Catalogo valida empresa e filial por consulta
+      sincrona a Organizacao.Contracts (fundacao-aplicacao, D15); nunca
+      confia so no claim do token, que nao diz a que empresa uma filial
+      pertence. Organizacao nunca referencia Catalogo
+    - Filial e uma entidade de Organizacao, exposta em Organizacao.Contracts;
       os demais modulos a referenciam apenas por FilialId
       (strongly-typed id no SharedKernel)
     - Estoque e POR FILIAL: saldo(produto_id, filial_id) com PK composta;
@@ -260,7 +274,7 @@ context: |
     - Buckets: mimir-blocks, mimir-ruler, mimir-alertmanager,
       loki-chunks, loki-ruler, tempo-traces, postgres-backup, e um unico
       bucket "arquivos" para negocio com prefixo por modulo
-      (cadastro/produtos/..., vendas/anexos/...)
+      (catalogo/produtos/..., vendas/anexos/...)
     - Uma chave de acesso por consumidor, com permissao so no seu bucket
 
     UPLOAD DE ARQUIVO DE NEGOCIO
@@ -308,7 +322,7 @@ context: |
     - Toda chave de cache de dado por filial DEVE incluir filial_id, e
       toda chave de dado por usuario DEVE incluir o usuario. Omitir e
       vazamento silencioso entre filiais/usuarios
-    - Bom cachear: lookups de Cadastro, tabela de preco, permissoes
+    - Bom cachear: lookups de Organizacao e Catalogo, tabela de preco, permissoes
       derivadas de claims. Cuidado com saldo de estoque (TTL de segundos)
 
   OBSERVABILIDADE
@@ -478,7 +492,7 @@ context: |
       (nativo no Npgsql, sem coluna extra) -> HTTP 409
     - Dinheiro: value object Dinheiro, numeric(19,4) no banco,
       arredondamento explicito apenas na totalizacao (nunca intermediario)
-    - Sem delete fisico em Cadastro: flag ativo + query filter global
+    - Sem delete fisico em Organizacao, Catalogo e Parceiros: flag ativo + query filter global
     - Paginacao: offset com envelope padrao (items, total, page, size);
       cursor apenas se surgir listagem realmente grande
     - Datas e horas: persistidas SEMPRE em UTC (timestamptz), em qualquer
@@ -541,7 +555,8 @@ context: |
         Erp.sln
         src/
           SharedKernel/  Platform/  Api/
-          Modules/  Cadastro/ Estoque/ Vendas/ Financeiro/
+          Modules/  Organizacao/ Catalogo/ Estoque/ Vendas/ Financeiro/
+                    (Parceiros: planejado, sem projeto ainda)
         tests/
           Architecture/  <Modulo>.Tests/
         deploy/
@@ -555,7 +570,7 @@ context: |
       -> da rastreabilidade de branch -> proposal -> specs
     - Conventional Commits, com escopo sendo o modulo ou a capability:
       feat(estoque): ...   fix(vendas): ...   chore(deploy): ...
-      docs(openspec): ...  test(cadastro): ...  refactor(platform): ...
+      docs(openspec): ...  test(catalogo): ...  refactor(platform): ...
     - Tags de release ADIADAS: um deployable unico teria uma versao so,
       e versionar sem producao e cerimonia vazia. O SHA da imagem ja
       responde "o que esta rodando". Semver comeca quando houver algo
@@ -569,7 +584,8 @@ context: |
     - Prefixo de assembly: Erp
         Erp.SharedKernel
         Erp.Platform
-        Erp.Modules.Cadastro
+        Erp.Modules.Organizacao
+        Erp.Modules.Catalogo
         Erp.Modules.Estoque
         Erp.Modules.Vendas
         Erp.Modules.Financeiro
@@ -582,14 +598,15 @@ context: |
       alguem esquece de atualizar ao criar um modulo
     - Trocar o prefixo depois e refactor global: decidir uma vez
     - Schemas Postgres espelham o nome do projeto, em minusculas:
-        platform, cadastro, estoque, vendas, financeiro
+        platform, organizacao, catalogo, estoque, vendas, financeiro
+        (parceiros, quando existir)
     - Namespaces k8s (tecnicos, em ingles):
         argocd, sealed-secrets, data (postgres, valkey),
         storage (minio), observability, app
     - Imagem: erp-comercial/api:sha-<git-sha>. Um so deployable,
       um so nome de imagem
     - Nome do repositorio evita nomear o sistema pelo modulo mais
-      visivel: "vendas" e um de quatro modulos, e o nome mentiria
+      visivel: "vendas" e um dos modulos, e o nome mentiria
       sobre o escopo
 
   IDIOMA (DESENVOLVIMENTO)

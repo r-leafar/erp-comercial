@@ -1,8 +1,9 @@
 ## Purpose
 
 Garante que toda alteracao de dado persistido carregue quem a originou e quando
-ocorreu, sem depender de o codigo de negocio lembrar de registrar isso, e que o
-cadastro preserve historico em vez de remover registros.
+ocorreu, sem depender de o codigo de negocio lembrar de registrar isso, e que as
+entidades de negocio de Organizacao, Catalogo e Parceiros sejam inativadas em
+vez de removidas, preservando historico.
 
 ## ADDED Requirements
 
@@ -56,25 +57,26 @@ independente do fuso do emissor.
   persistidas
 - **THEN** seus instantes sao diretamente comparaveis e ordenaveis
 
-### Requirement: Cadastro sem remocao fisica
+### Requirement: Entidades de negocio sao inativadas, nunca excluidas fisicamente
 
-Registro de cadastro SHALL ser inativado em vez de removido. Consulta padrao MUST
-retornar apenas registros ativos, e a inclusao dos inativos MUST ser explicita.
+Entidade de negocio de Organizacao, Catalogo e Parceiros SHALL ser inativada em
+vez de removida. Consulta padrao MUST retornar apenas entidades ativas, e a
+inclusao das inativas MUST ser explicita.
 
-#### Scenario: Inativacao preserva o registro
+#### Scenario: Inativacao preserva a entidade
 
-- **WHEN** um registro de cadastro e inativado
-- **THEN** ele deixa de aparecer nas consultas padrao e permanece armazenado
+- **WHEN** uma entidade de negocio e inativada
+- **THEN** ela deixa de aparecer nas consultas padrao e permanece armazenado
 
 #### Scenario: Consulta padrao omite inativos
 
-- **WHEN** uma consulta de cadastro e realizada sem pedido explicito de inativos
-- **THEN** apenas registros ativos sao retornados
+- **WHEN** uma consulta de entidades de negocio e realizada sem pedido explicito de inativas
+- **THEN** apenas entidades ativas sao retornados
 
 #### Scenario: Inativos podem ser consultados explicitamente
 
 - **WHEN** uma consulta pede explicitamente a inclusao de inativos
-- **THEN** os registros inativos sao retornados e identificados como tal
+- **THEN** as entidades inativas sao retornadas e identificados como tal
 
 ### Requirement: Contexto de execucao uniforme entre origens
 

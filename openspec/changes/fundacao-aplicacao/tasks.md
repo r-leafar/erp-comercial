@@ -116,9 +116,9 @@ verificavel isoladamente, com o criterio escrito junto quando nao e obvio.
 - [ ] 6.9 Implementar o contexto de execucao de usuario e filial, consumido pelos
       casos de uso sem que eles distingam a origem da execucao.
 - [ ] 6.10 Implementar o papel `AdminEmpresa`: resolver o conjunto de filiais
-      acessiveis consultando a interface publica de `cadastro/filial` da
+      acessiveis consultando a interface publica de `organizacao/filial` da
       empresa do usuario, em vez de comparar contra a lista fixa do token.
-      Depende da secao 9 (cadastro). Verificacao: filial criada apos a emissao
+      Depende da secao 9 (Organizacao). Verificacao: filial criada apos a emissao
       do token fica acessivel ao `AdminEmpresa` da mesma empresa sem
       reemissao; filial de empresa diferente continua recusada.
 
@@ -137,7 +137,7 @@ verificavel isoladamente, com o criterio escrito junto quando nao e obvio.
 - [ ] 7.5 Configurar a concorrencia otimista pelo token nativo do banco, sem
       coluna adicional. Verificacao: teste de integracao com duas alteracoes a
       partir da mesma leitura confirma que a segunda e recusada como conflito.
-- [ ] 7.6 Implementar a inativacao em lugar de remocao no cadastro, com as
+- [ ] 7.6 Implementar a inativacao em lugar de remocao em Organizacao e Catalogo, com as
       consultas padrao omitindo inativos. Verificacao: teste que confirma a
       omissao e a inclusao explicita.
 - [ ] 7.7 Configurar os testes de integracao sobre dependencias reais efemeras.
@@ -166,7 +166,9 @@ verificavel isoladamente, com o criterio escrito junto quando nao e obvio.
       (remocao, renomeacao, obrigatoriedade sem valor padrao, mudanca incompativel
       de tipo) e o procedimento de renomeacao em releases sucessivas.
 
-## 9. Cadastro: empresa, filial e produto
+## 9. Organizacao e Catalogo: empresa, filial e produto
+
+### 9a. Organizacao (empresa e filial)
 
 - [ ] 9.1 Implementar a empresa como entidade global, com codigo unico.
       Verificacao: codigo repetido e recusado com erro de negocio identificavel.
@@ -179,11 +181,19 @@ verificavel isoladamente, com o criterio escrito junto quando nao e obvio.
       Verificacao: codigo repetido dentro da mesma empresa e recusado; o mesmo
       codigo em empresa diferente e aceito.
 - [ ] 9.5 Expor a identificacao da filial nos contratos publicos do modulo, para
-      referencia pelos demais.
+      referencia pelos demais, junto com a consulta de empresa e situacao ativa
+      da filial usada por Catalogo (D15). Verificacao: filial inexistente e
+      distinguida de inativa.
 - [ ] 9.6 Implementar a inativacao de filial preservando as referencias
       existentes. Verificacao: dados que a referenciam continuam integros e
       consultaveis.
 - [ ] 9.7 Implementar a consulta individual e a listagem paginada de filiais.
+### 9b. Catalogo (produto)
+
+Produto referencia `EmpresaId` e `FilialId` apenas como IDs, sem FK entre schemas.
+Empresa e filial sao validadas por consulta sincrona a `Organizacao.Contracts`
+(D15), unica dependencia permitida de Catalogo para Organizacao.
+
 - [ ] 9.8 Implementar o produto vinculado a uma empresa (`Produto.EmpresaId`
       obrigatorio desde a criacao), com codigo unico dentro da empresa.
       Verificacao: cadastro com codigo repetido na mesma empresa e recusado,
@@ -212,7 +222,12 @@ verificavel isoladamente, com o criterio escrito junto quando nao e obvio.
 - [ ] 9.16 Expor a consulta de existencia de produto nos contratos publicos, para
       uso do outro modulo.
 - [ ] 9.17 Escrever os testes de integracao do modulo sobre dependencia real
-      efemera, cobrindo empresa, filial e produto.
+      efemera, cobrindo empresa e filial (Organizacao) e produto (Catalogo), cada modulo com
+      seu proprio projeto de testes.
+- [ ] 9.18 Escrever o teste de arquitetura que trava os dois sentidos: `Catalogo`
+      so referencia `Organizacao.Contracts`, e `Organizacao` nunca referencia
+      `Catalogo`. Verificacao: introduzir cada referencia proibida e confirmar
+      a falha.
 
 ## 10. Estoque: saldo por filial e a fronteira verificada
 
@@ -231,7 +246,7 @@ verificavel isoladamente, com o criterio escrito junto quando nao e obvio.
 - [ ] 10.5 Armazenar apenas as identificacoes de produto e de filial, sem copia de
       dados e sem vinculo de integridade entre schemas. Verificacao: inspecao da
       estrutura.
-- [ ] 10.6 Obter dado descritivo de produto pela interface publica do cadastro.
+- [ ] 10.6 Obter dado descritivo de produto pela interface publica de `Catalogo.Contracts`.
       Verificacao: nenhuma copia local e mantida.
 - [ ] 10.7 Restringir a consulta de saldo as filiais da identidade. Verificacao:
       consulta em filial nao pertencente e recusada sem revelar o dado.

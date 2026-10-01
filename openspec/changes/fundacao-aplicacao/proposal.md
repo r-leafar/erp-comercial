@@ -51,8 +51,8 @@ dois modulos existindo.
 - **A aplicacao como carga de trabalho declarada**, com sinais de saude,
   identificacao de imagem por conteudo do commit, contagem de replicas zerada em
   desenvolvimento, e o dado inicial sem o qual a primeira execucao nao autentica.
-- **Primeira fatia vertical**: `Cadastro` com empresa, filial e produto, e
-  `Estoque` com o saldo por filial — somente a estrutura e a leitura. E o
+- **Primeira fatia vertical**: `Organizacao` com empresa e filial, `Catalogo`
+  com produto, e `Estoque` com o saldo por filial — somente a estrutura e a leitura. E o
   minimo que torna a fronteira entre modulos verificavel.
 
 ### Non-goals
@@ -106,7 +106,7 @@ proprio.
   navegavel da API.
 - `aplicacao/escrita-auditada`: autoria e instante de criacao e alteracao
   preenchidos sem participacao do codigo de negocio, sempre com o usuario que
-  originou a acao, e ausencia de remocao fisica no cadastro.
+  originou a acao, e ausencia de remocao fisica nos registros de Organizacao e Catalogo.
 - `aplicacao/evolucao-de-schema`: aplicacao do schema antes da troca da versao em
   execucao, exigencia de compatibilidade retroativa em toda alteracao, isolamento
   por modulo, e interrupcao da implantacao quando a alteracao falha.
@@ -116,15 +116,15 @@ proprio.
 - `aplicacao/implantacao-da-aplicacao`: sinais de saude e de prontidao,
   identificacao da versao em execucao pelo conteudo do commit, ausencia de
   replicas em desenvolvimento, e o dado inicial necessario a primeira execucao.
-- `cadastro/empresa`: existencia da empresa como entidade global do cadastro, com
+- `organizacao/empresa`: existencia da empresa como entidade global, topo da hierarquia de Organizacao, com
   codigo unico, inativacao em lugar de remocao preservando as referencias de
   filial e produto que a apontam, e consulta individual e paginada — o mesmo
   padrao de CRUD ja adotado por filial e produto.
-- `cadastro/filial`: existencia da filial vinculada a uma empresa
+- `organizacao/filial`: existencia da filial vinculada a uma empresa
   (`Filial.EmpresaId` obrigatorio desde a criacao), sua identificacao estavel
   referenciada pelos demais modulos, e a unicidade de codigo dentro da empresa a
   que pertence.
-- `cadastro/produto`: cadastro do produto vinculado a uma empresa
+- `catalogo/produto`: cadastro do produto vinculado a uma empresa
   (`Produto.EmpresaId` obrigatorio desde a criacao), com unicidade de codigo
   dentro da empresa, escopo obrigatorio de disponibilidade por filial
   (`Corporativo` ou `FiliaisEspecificas`, este ultimo via `ProdutoFilial`),
@@ -171,8 +171,8 @@ primeira execucao e o receptor precisa existir para comprovar que emite.
 **Risco assumido e registrado**
 
 A fatia vertical existe para tornar a fronteira verificavel, e nao para operar.
-Ha risco de ela crescer durante a implementacao ate virar a change do modulo de
-cadastro. O criterio que a mantem no lugar: nenhum caso de uso alem de criar,
+Ha risco de ela crescer durante a implementacao ate virar a change dos modulos de
+Organizacao e Catalogo. O criterio que a mantem no lugar: nenhum caso de uso alem de criar,
 alterar, inativar e consultar entra aqui, e o saldo nao se movimenta.
 
 Ha tambem uma verificacao que o ambiente de desenvolvimento nao reproduz

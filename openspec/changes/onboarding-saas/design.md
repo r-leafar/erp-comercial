@@ -3,8 +3,8 @@
 ## Context
 
 Ver proposal.md para motivacao. Duas pecas ja existem e esta change apenas as
-consome, sem re-especifica-las: `cadastro/empresa` (Empresa como topo do
-cadastro, `fundacao-aplicacao`) e o papel `AdminEmpresa` com resolucao dinamica
+consome, sem re-especifica-las: `organizacao/empresa` (Empresa como topo de
+Organizacao, `fundacao-aplicacao`) e o papel `AdminEmpresa` com resolucao dinamica
 de filial (D4 do design.md de `fundacao-aplicacao`). Nenhuma das duas foi
 implementada ainda -- esta change assume o contrato que elas descrevem, nao o
 codigo.
@@ -20,7 +20,7 @@ pela propria pessoa.
 **Goals:**
 - Decidir ONDE a conta (email + senha) e persistida, dado que o emissor local
   de `fundacao-aplicacao` nao tem esse armazenamento
-- Decidir como criar Empresa (modulo Cadastro) e Conta (este modulo) sem
+- Decidir como criar Empresa (modulo Organizacao) e Conta (este modulo) sem
   transacao cruzando schemas, respeitando a fronteira ja estabelecida
 - Decidir onde vive a verificacao de bloqueio por trial expirado
 
@@ -34,12 +34,12 @@ pela propria pessoa.
 
 ## Decisions
 
-### D1. Novo modulo `Comercial`, dono da Conta -- nem Cadastro, nem Platform
+### D1. Novo modulo `Comercial`, dono da Conta -- nem Organizacao, nem Platform
 
 A Conta (email, hash de senha, vinculo com a Empresa que administra) vive num
-modulo novo, `Comercial`, e nao em `Cadastro` nem em `Platform`.
+modulo novo, `Comercial`, e nao em `Organizacao` nem em `Platform`.
 
-**Consequencia que evita:** duas. Colocar Conta em Cadastro faria o modulo que
+**Consequencia que evita:** duas. Colocar Conta em Organizacao faria o modulo que
 descreve a OPERACAO de uma empresa (Filial, Produto) tambem responder por como
 a empresa entrou no sistema -- dois motivos de mudanca no mesmo modulo.
 Colocar em Platform confundiria infraestrutura compartilhada (outbox, arquivo,
@@ -47,7 +47,7 @@ pipeline de auth generico) com uma capacidade de negocio com ciclo de vida
 proprio (trial, expiracao) -- Platform hoje nao tem nenhuma entidade com
 regra de negocio, so mecanismo.
 
-**Alternativa recusada:** estender `cadastro/empresa` com os campos de conta.
+**Alternativa recusada:** estender `organizacao/empresa` com os campos de conta.
 Rejeitada porque acopla identidade (quem loga) a cadastro (o que a empresa
 tem), e o proprio `fundacao-aplicacao` ja decidiu (D4) que autorizacao
 tecnica e autorizacao de negocio sao responsabilidades separadas -- Conta e
@@ -55,15 +55,15 @@ autorizacao tecnica.
 
 ### D2. Empresa e Conta sao criadas por compensacao, nao por transacao unica
 
-`Comercial` chama a interface publica de `Cadastro` para criar a Empresa
-PRIMEIRO, numa transacao do proprio Cadastro. So depois `Comercial` cria a
+`Comercial` chama a interface publica de `Organizacao` para criar a Empresa
+PRIMEIRO, numa transacao da propria Organizacao. So depois `Comercial` cria a
 Conta e o vinculo de administracao, na sua propria transacao. Se o segundo
 passo falhar, `Comercial` aciona a inativacao da Empresa recem-criada (mesmo
-mecanismo de `cadastro/empresa`) em vez de deixa-la orfa.
+mecanismo de `organizacao/empresa`) em vez de deixa-la orfa.
 
 ```
-   Comercial                          Cadastro
-   ---------                          --------
+   Comercial                          Organizacao
+   ---------                          -----------
    1. cria Empresa  -------------->   grava Empresa (tx propria)
                     <--------------   EmpresaId
    2. cria Conta + vinculo
@@ -72,7 +72,7 @@ mecanismo de `cadastro/empresa`) em vez de deixa-la orfa.
       falhou? ------------------->   inativa EmpresaId (tx propria)
 ```
 
-**Consequencia que evita:** uma transacao cruzando os schemas de Cadastro e
+**Consequencia que evita:** uma transacao cruzando os schemas de Organizacao e
 Comercial contradiz a fronteira ja estabelecida (SEM FK entre schemas, 1
 DbContext por modulo) -- exatamente o tipo de acoplamento que o teste de
 arquitetura de `fundacao-aplicacao` existe para pegar.
@@ -115,8 +115,8 @@ pipeline que ja resolve `AdminEmpresa` (D4/nota de `fundacao-aplicacao`):
 antes de qualquer operacao de escrita, consulta se a empresa do usuario esta
 com trial expirado pela interface publica deste modulo, e recusa se estiver.
 
-**Consequencia que evita:** repetir a mesma verificacao em Cadastro, Estoque,
-Vendas e Financeiro -- quatro copias da mesma regra, uma delas eventualmente
+**Consequencia que evita:** repetir a mesma verificacao em Organizacao, Catalogo,
+Estoque, Vendas e Financeiro -- cinco copias da mesma regra, uma delas eventualmente
 esquecida quando um modulo novo nascer.
 
 **Alternativa recusada:** cada modulo verificar o estado da empresa antes de

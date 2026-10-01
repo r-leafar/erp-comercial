@@ -1,15 +1,15 @@
 ## Purpose
 
-Estabelece a empresa como topo da hierarquia do cadastro — a unidade que
+Estabelece a empresa como topo da hierarquia de Organizacao — a unidade que
 possui filiais e da qual filial e produto herdam o escopo de unicidade de
 codigo — e como identificacao estavel referenciada por filial e produto.
 
 ## ADDED Requirements
 
-### Requirement: Empresa e entidade global do cadastro, com codigo unico
+### Requirement: Empresa e entidade global de Organizacao, com codigo unico
 
 A empresa SHALL ser cadastrada de forma global. Seu codigo MUST ser unico em
-todo o cadastro, sem recorte por nenhuma outra entidade — nao ha nada acima
+todas as empresas, sem recorte por nenhuma outra entidade — nao ha nada acima
 dela na hierarquia.
 
 #### Scenario: Empresa e cadastrada com codigo unico

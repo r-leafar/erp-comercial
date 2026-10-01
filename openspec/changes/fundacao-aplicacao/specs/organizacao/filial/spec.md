@@ -33,7 +33,7 @@ filial da mesma empresa.
 
 A filial SHALL possuir identificacao estavel, e os demais modulos MUST
 referencia-la apenas por essa identificacao, sem manter copia dos seus dados nem
-depender da estrutura interna do cadastro.
+depender da estrutura interna de Organizacao.
 
 #### Scenario: Outro modulo referencia a filial por identificacao
 
@@ -46,10 +46,26 @@ depender da estrutura interna do cadastro.
 - **THEN** sua identificacao permanece a mesma, e as referencias existentes
   continuam validas
 
-#### Scenario: Consulta de dados da filial vem do cadastro
+#### Scenario: Consulta de dados da filial vem de Organizacao
 
 - **WHEN** outro modulo precisa dos dados descritivos de uma filial
-- **THEN** ele os obtem do cadastro pela interface publica, e nao de copia propria
+- **THEN** ele os obtem de `Organizacao.Contracts`, e nao de copia propria
+
+### Requirement: Consulta de empresa e situacao da filial por interface publica
+
+`Organizacao.Contracts` SHALL expor consulta que, dada uma filial, informe a
+empresa a que pertence e se ela esta ativa, para que outros modulos verifiquem
+suas regras sem depender da estrutura interna.
+
+#### Scenario: Modulo consulta a empresa de uma filial
+
+- **WHEN** outro modulo consulta uma filial existente pela interface publica
+- **THEN** recebe o identificador da empresa e a situacao ativa ou inativa
+
+#### Scenario: Filial inexistente e distinguida de filial inativa
+
+- **WHEN** outro modulo consulta uma filial que nao existe
+- **THEN** a resposta a distingue de uma filial inativa
 
 ### Requirement: Inativacao em lugar de remocao
 
